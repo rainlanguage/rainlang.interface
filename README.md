@@ -1,4 +1,4 @@
-# rain.interpreter.interface
+# rainlang.interface
 
 ## High level
 
