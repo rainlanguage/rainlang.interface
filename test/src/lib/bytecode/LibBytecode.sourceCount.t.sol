@@ -12,6 +12,13 @@ contract LibBytecodeSourceCountTest is Test {
         assertEq(LibBytecode.sourceCount(""), 0);
     }
 
+    /// The NatSpec documents 0x and 0x00 as equivalent, both having 0 sources.
+    /// `testSourceCount0` pins the empty case; this pins the single 0x00 byte
+    /// explicitly.
+    function testSourceCountSingleZeroByte() external pure {
+        assertEq(LibBytecode.sourceCount(hex"00"), 0);
+    }
+
     /// Test that a non-zero length bytecode returns the first byte as the
     /// source count.
     function testSourceCount1(bytes memory bytecode) external pure {
