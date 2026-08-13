@@ -3,7 +3,7 @@
 pragma solidity ^0.8.25;
 
 import {LibParseMeta} from "src/lib/parse/LibParseMeta.sol";
-import {LibCtPop} from "rain-math-binary-0.1.1/src/lib/LibCtPop.sol";
+import {LibCtPop} from "rain-math-binary-0.1.3/src/lib/LibCtPop.sol";
 import {AuthoringMetaV2} from "src/interface/IParserV2.sol";
 
 library LibGenParseMetaSlow {

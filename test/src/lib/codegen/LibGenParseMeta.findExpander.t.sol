@@ -5,7 +5,7 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.16.1/src/Test.sol";
 
 import {LibBloom} from "test/lib/bloom/LibBloom.sol";
-import {LibCtPop} from "rain-math-binary-0.1.1/src/lib/LibCtPop.sol";
+import {LibCtPop} from "rain-math-binary-0.1.3/src/lib/LibCtPop.sol";
 import {LibAuthoringMeta, AuthoringMetaV2} from "test/lib/meta/LibAuthoringMeta.sol";
 import {LibGenParseMeta} from "src/lib/codegen/LibGenParseMeta.sol";
 import {LibGenParseMetaSlow} from "test/src/lib/codegen/LibGenParseMetaSlow.sol";
