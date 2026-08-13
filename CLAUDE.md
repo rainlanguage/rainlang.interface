@@ -65,7 +65,7 @@ Interpreters must be resilient to malicious expressions. Eval is read-only; stat
 
 ## Tests
 
-Tests are in `test/src/lib/` mirroring the `src/lib/` structure. Test files use `.t.sol` suffix. Some test helpers use `.Slow.sol` suffix for reference implementations used in differential testing.
+Tests are in `test/src/lib/` mirroring the `src/lib/` structure. Test files use `.t.sol` suffix. Reference implementations used in differential testing append `Slow` to the library name, with no separating dot: `LibNamespaceSlow.sol`, `LibBytecodeSlow.sol`.
 
 ## Dependencies
 
