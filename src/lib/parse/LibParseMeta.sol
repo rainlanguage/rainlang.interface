@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {LibCtPop} from "rain-math-binary-0.1.3/src/lib/LibCtPop.sol";
+import {LibCtPop} from "rain-math-binary-0.1.4/src/lib/LibCtPop.sol";
 
 /// @dev 4 = 1 byte opcode index + 3 byte fingerprint
 uint256 constant META_ITEM_SIZE = 4;
