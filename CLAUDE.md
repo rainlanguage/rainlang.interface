@@ -24,8 +24,6 @@ Compiler: Solidity 0.8.25, EVM target: cancun, optimizer enabled (1M runs). Fuzz
 
 All reverts use custom errors — no `revert("string")` or `require()` with string messages.
 
-Interfaces use `pragma solidity ^0.8.25`; libraries and errors use `^0.8.25`.
-
 ## Architecture
 
 ### Core Interfaces (`src/interface/`)
@@ -69,7 +67,7 @@ Tests are in `test/src/lib/` mirroring the `src/lib/` structure. Test files use 
 
 ## Dependencies
 
-Git submodules in `lib/`: forge-std, openzeppelin-contracts, and Rain Protocol libraries (rain.sol.codegen, rain.solmem, rain.lib.hash, rain.lib.typecast, rain.math.binary, rain.math.float, rain.intorastring). The `rain.sol.codegen` submodule has a remapping configured in `foundry.toml`.
+Soldeer, installed into `dependencies/`. Imports carry the package version in the path (`rain-solmem-0.1.3/src/...`), so a version bump rewrites every import of that package.
 
 ## Branch Naming
 
