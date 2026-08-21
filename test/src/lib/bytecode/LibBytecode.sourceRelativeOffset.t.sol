@@ -78,10 +78,9 @@ contract LibBytecodeSourceRelativeOffsetTest is BytecodeTest {
         );
     }
 
-    /// The relative offset is a 16 bit big-endian value, so its high byte is
-    /// load-bearing. These cases pin offsets that do not fit in a single byte
-    /// (>= 0x100). A mask that dropped the high byte would read a different,
-    /// smaller offset. `sourceRelativeOffset` does not validate that the offset
+    /// The relative offset is a 16 bit big-endian value. These cases pin
+    /// offsets that do not fit in a single byte (>= 0x100). A mask that
+    /// dropped the high byte would read a different, smaller offset. `sourceRelativeOffset` does not validate that the offset
     /// points anywhere real (that is `checkNoOOBPointers`' job), so the offset
     /// bytes can be set directly without a conforming body.
     function testSourceRelativeOffsetHighByte() external pure {
