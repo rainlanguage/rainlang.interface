@@ -7,10 +7,10 @@ integrity = "bce03af7ada1eee21a7fff393f238bcd7cd75a022a4db55ffb6b0dbb32433d35"
 
 [[dependencies]]
 name = "forge-std"
-version = "1.16.1"
-url = "https://soldeer-revisions.s3.amazonaws.com/forge-std/1_16_1_08-05-2026_08:51:16_forge-std-1.16.zip"
-checksum = "839b61832925c7152c7b6dffbfa4998d9e606211179bd8f604733124e8a7cb57"
-integrity = "60e55d10150354ca4a1e2985c5456c834b92b82ef85ab0e1d92a7786cddbd219"
+version = "1.16.2"
+url = "https://soldeer-revisions.s3.amazonaws.com/forge-std/1_16_2_03-07-2026_07:37:45_forge-std-1.16.zip"
+checksum = "405dccc9d60d753f6abc412b4adf0359f4390f65dbadbbb277a12b4946ed8969"
+integrity = "5fb4325b60d7d4194bd0481e2f94398cf1d9c6561dd12a66fb2748ef4a68205f"
 
 [[dependencies]]
 name = "rain-lib-hash"
@@ -21,10 +21,10 @@ integrity = "91f5f679a0a27f096fdbc1e41195dd9f42cacfab15735efeb1101cc1b9215b47"
 
 [[dependencies]]
 name = "rain-lib-typecast"
-version = "0.1.0"
-url = "https://soldeer-revisions.s3.amazonaws.com/rain-lib-typecast/0_1_0_12-05-2026_16:31:39_rain.lib.zip"
-checksum = "5c0419501e4c763ef161a3489934af192219f994cb2c9187699bc4dee0b4e2bb"
-integrity = "092781f87fd9227c4c95aafde59300c503d6a9a355beaeb5c5732fe6e36676d6"
+version = "0.1.4"
+url = "https://soldeer-revisions.s3.amazonaws.com/rain-lib-typecast/0_1_4_21-08-2026_15:46:41_rain.lib.zip"
+checksum = "ce1339c0a06de699508247dc882c5aaf715ab4ae67d53336ae72ae88810f5540"
+integrity = "eeb92ffe224186151d210137324a69e6154947bf987c18ea8b3233174291ce5c"
 
 [[dependencies]]
 name = "rain-math-binary"
@@ -35,10 +35,10 @@ integrity = "857d22060d058ec173e88448c2d44f0cb884b2381669d0dbe1d3bebb168715ea"
 
 [[dependencies]]
 name = "rain-sol-codegen"
-version = "0.1.0"
-url = "https://soldeer-revisions.s3.amazonaws.com/rain-sol-codegen/0_1_0_09-05-2026_20:30:25_rain.sol.zip"
-checksum = "6b5abd394c5db86ac64214262b7a5115158f480b2fbd74442672dfe52bb67310"
-integrity = "e22748ce2ba7eca3ce71e23b2271d1c0f370b989507e784b0a4850a7a9e52157"
+version = "0.1.36"
+url = "https://soldeer-revisions.s3.amazonaws.com/rain-sol-codegen/0_1_36_18-08-2026_09:20:33_rain.sol.zip"
+checksum = "b5d101d46941a95fee441224e101004139814ae9afa2793138874bd7e93991ff"
+integrity = "164e2655ac8b66bcf52c799421706d3dfaab987addaaeadd74574e70fd2eb6ed"
 
 [[dependencies]]
 name = "rain-solmem"
