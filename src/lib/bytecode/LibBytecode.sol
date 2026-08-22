@@ -2,9 +2,9 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {LibPointer, Pointer} from "rain-solmem-0.1.3/src/lib/LibPointer.sol";
-import {LibBytes} from "rain-solmem-0.1.3/src/lib/LibBytes.sol";
-import {LibMemCpy} from "rain-solmem-0.1.3/src/lib/LibMemCpy.sol";
+import {LibPointer, Pointer} from "rain-solmem-0.1.26/src/lib/LibPointer.sol";
+import {LibBytes} from "rain-solmem-0.1.26/src/lib/LibBytes.sol";
+import {LibMemCpy} from "rain-solmem-0.1.26/src/lib/LibMemCpy.sol";
 import {
     StackSizingsNotMonotonic,
     TruncatedSource,
