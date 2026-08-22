@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {LibHashNoAlloc, HASH_NIL} from "rain-lib-hash-0.1.0/src/LibHashNoAlloc.sol";
 import {LibCast} from "rain-lib-typecast-0.1.0/src/LibCast.sol";
-import {LibUint256Array} from "rain-solmem-0.1.3/src/lib/LibUint256Array.sol";
+import {LibUint256Array} from "rain-solmem-0.1.26/src/lib/LibUint256Array.sol";
 
 import {SignedContextV1} from "src/interface/IInterpreterCallerV4.sol";
 

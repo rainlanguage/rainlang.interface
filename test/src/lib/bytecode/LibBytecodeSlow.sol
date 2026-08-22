@@ -3,8 +3,8 @@
 pragma solidity ^0.8.25;
 
 import {SourceIndexOutOfBounds} from "src/lib/bytecode/LibBytecode.sol";
-import {Pointer, LibPointer} from "rain-solmem-0.1.3/src/lib/LibPointer.sol";
-import {LibBytes} from "rain-solmem-0.1.3/src/lib/LibBytes.sol";
+import {Pointer, LibPointer} from "rain-solmem-0.1.26/src/lib/LibPointer.sol";
+import {LibBytes} from "rain-solmem-0.1.26/src/lib/LibBytes.sol";
 
 library LibBytecodeSlow {
     using LibBytes for bytes;
