@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test} from "forge-std-1.16.1/src/Test.sol";
+import {Test} from "forge-std-1.16.2/src/Test.sol";
 
 abstract contract BytecodeTest is Test {
     function conformBytecode(bytes memory bytecode, uint256 sourceCount, bytes32 seed) internal pure {
