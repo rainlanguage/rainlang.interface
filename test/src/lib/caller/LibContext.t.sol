@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test} from "forge-std-1.16.2/src/Test.sol";
+import {Test, stdError} from "forge-std-1.16.2/src/Test.sol";
 import {
     LibContext,
     MessageHashUtils,
@@ -184,5 +184,237 @@ contract LibContextTest is Test {
 
     function testBuildGas0() public view {
         LibContext.build(new bytes32[][](0), new SignedContextV1[](0));
+    }
+
+    /// Private key of the signer used by the signed-context length and
+    /// calldata tests.
+    uint256 constant SIGNER_PK = 0x5163;
+
+    /// Signs `words` the way `build` verifies them: the keccak of the packed
+    /// words with no length prefix, wrapped as an eth-signed message. The
+    /// digest is computed here without `LibHashNoAlloc` so the expected value
+    /// does not come from the code under test.
+    function signWords(uint256 pk, bytes32[] memory words) internal pure returns (bytes memory) {
+        bytes32 digest = MessageHashUtils.toEthSignedMessageHash(keccak256(abi.encodePacked(words)));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk, digest);
+        return abi.encodePacked(r, s, v);
+    }
+
+    /// One signed context from `pk` presenting `context` under a signature
+    /// over `signedWords`.
+    function signedContextsFor(uint256 pk, bytes32[] memory context, bytes32[] memory signedWords)
+        internal
+        pure
+        returns (SignedContextV1[] memory)
+    {
+        SignedContextV1[] memory signedContexts = new SignedContextV1[](1);
+        signedContexts[0] =
+            SignedContextV1({signer: vm.addr(pk), context: context, signature: signWords(pk, signedWords)});
+        return signedContexts;
+    }
+
+    function words1(bytes32 x) internal pure returns (bytes32[] memory words) {
+        words = new bytes32[](1);
+        words[0] = x;
+    }
+
+    function words2(bytes32 x, bytes32 y) internal pure returns (bytes32[] memory words) {
+        words = new bytes32[](2);
+        words[0] = x;
+        words[1] = y;
+    }
+
+    /// A signature over `[x]` does not authenticate `[x, y]`. The signed
+    /// digest covers `32 * length` bytes, so the appended word changes it.
+    /// The positive control, that a signature does authenticate exactly what
+    /// was signed, is `testBuildStructureReferenceImplementation` and the
+    /// first signed context of `testBuildInvalidSignatureSecondIndex`.
+    function testBuildSignedContextAppendedWordReverts(bytes32 x, bytes32 y) external {
+        SignedContextV1[] memory signedContexts = signedContextsFor(SIGNER_PK, words2(x, y), words1(x));
+
+        vm.expectRevert(abi.encodeWithSelector(InvalidSignature.selector, uint256(0)));
+        this.buildExternal(new bytes32[][](0), signedContexts);
+    }
+
+    /// A signature over `[x]` does not authenticate `[x, 0]`. Zero-extending
+    /// the context still changes the number of bytes hashed.
+    function testBuildSignedContextAppendedZeroReverts(bytes32 x) external {
+        SignedContextV1[] memory signedContexts = signedContextsFor(SIGNER_PK, words2(x, 0), words1(x));
+
+        vm.expectRevert(abi.encodeWithSelector(InvalidSignature.selector, uint256(0)));
+        this.buildExternal(new bytes32[][](0), signedContexts);
+    }
+
+    /// A signature over `[x]` does not authenticate `[]`.
+    function testBuildSignedContextEmptiedReverts(bytes32 x) external {
+        SignedContextV1[] memory signedContexts = signedContextsFor(SIGNER_PK, new bytes32[](0), words1(x));
+
+        vm.expectRevert(abi.encodeWithSelector(InvalidSignature.selector, uint256(0)));
+        this.buildExternal(new bytes32[][](0), signedContexts);
+    }
+
+    /// A signature over `[x, y]` does not authenticate its prefix `[x]`.
+    function testBuildSignedContextTruncatedReverts(bytes32 x, bytes32 y) external {
+        SignedContextV1[] memory signedContexts = signedContextsFor(SIGNER_PK, words1(x), words2(x, y));
+
+        vm.expectRevert(abi.encodeWithSelector(InvalidSignature.selector, uint256(0)));
+        this.buildExternal(new bytes32[][](0), signedContexts);
+    }
+
+    /// The 32-byte word at byte `offset` of `data`.
+    function word(bytes memory data, uint256 offset) internal pure returns (bytes32 w) {
+        assembly ("memory-safe") {
+            w := mload(add(add(data, 0x20), offset))
+        }
+    }
+
+    /// Overwrites the 32-byte word at byte `offset` of `data`.
+    function setWord(bytes memory data, uint256 offset, bytes32 w) internal pure {
+        assembly ("memory-safe") {
+            mstore(add(add(data, 0x20), offset), w)
+        }
+    }
+
+    /// Calldata for `buildExternal` with no base context and one signed
+    /// context from `SIGNER_PK` presenting `context` under a signature over
+    /// `signedWords`.
+    function buildCalldata(bytes32[] memory context, bytes32[] memory signedWords)
+        internal
+        view
+        returns (bytes memory)
+    {
+        return abi.encodeCall(
+            this.buildExternal, (new bytes32[][](0), signedContextsFor(SIGNER_PK, context, signedWords))
+        );
+    }
+
+    /// Byte offset in `payload`, calldata for `buildExternal` with exactly one
+    /// signed context, of that context's `context.length` word. Each dynamic
+    /// value is reached through the offset word that points at it, so a
+    /// change in the encoding moves the result instead of patching the wrong
+    /// word:
+    ///
+    ///   0x00  selector
+    ///   0x04  head: offset of `baseContext`, offset of `signedContexts`,
+    ///         both relative to the head start
+    ///   `signedContexts`: length word, then one offset per element relative
+    ///         to the first offset word
+    ///   `signedContexts[0]`: `signer`, offset of `context`, offset of
+    ///         `signature`, offsets relative to the struct start
+    ///   `context`: length word, then `length` words
+    function contextLengthOffset(bytes memory payload) internal pure returns (uint256) {
+        uint256 headStart = 4;
+        uint256 signedContextsStart = headStart + uint256(word(payload, headStart + 0x20));
+        assertEq(uint256(word(payload, signedContextsStart)), 1, "one signed context");
+        uint256 elementsStart = signedContextsStart + 0x20;
+        uint256 structStart = elementsStart + uint256(word(payload, elementsStart));
+        return structStart + uint256(word(payload, structStart + 0x20));
+    }
+
+    /// Words of calldata from the first `context` word to the end of
+    /// `payload`. The decoder bounds an array by the end of the calldata, not
+    /// by the end of the value it belongs to, so a `context.length` up to
+    /// this many words decodes.
+    function contextWordsToEnd(bytes memory payload, uint256 lengthOffset) internal pure returns (uint256) {
+        return (payload.length - lengthOffset - 0x20) / 0x20;
+    }
+
+    /// Positive control for the patched-calldata tests: the unpatched
+    /// calldata builds the context, with the signed column as presented.
+    function testBuildCalldataUnpatchedSucceeds() external {
+        bytes32 x = bytes32(uint256(42));
+        bytes memory payload = buildCalldata(words1(x), words1(x));
+        assertEq(uint256(word(payload, contextLengthOffset(payload))), 1, "context length");
+
+        //slither-disable-next-line low-level-calls
+        (bool success, bytes memory returnData) = address(this).call(payload);
+        assertTrue(success);
+        bytes32[][] memory context = abi.decode(returnData, (bytes32[][]));
+        assertEq(context.length, 3);
+        assertEq(context[1], words1(bytes32(uint256(uint160(vm.addr(SIGNER_PK))))));
+        assertEq(context[2], words1(x));
+    }
+
+    /// A `context.length` that claims more words than remain in the calldata
+    /// is rejected by the ABI decoder before `build` runs: the call fails with
+    /// empty return data. Bounded at 2^58 so that the memory the decoder
+    /// reserves for the array, `32 * (length + 1)` bytes past the free
+    /// memory pointer, stays below the 2^64 - 1 allocation limit.
+    function testBuildCalldataContextLengthBeyondCalldataReverts(uint256 length) external {
+        bytes32 x = bytes32(uint256(42));
+        bytes memory payload = buildCalldata(words1(x), words1(x));
+        uint256 lengthOffset = contextLengthOffset(payload);
+        length = bound(length, contextWordsToEnd(payload, lengthOffset) + 1, 1 << 58);
+        setWord(payload, lengthOffset, bytes32(length));
+
+        //slither-disable-next-line low-level-calls
+        (bool success, bytes memory returnData) = address(this).call(payload);
+        assertFalse(success);
+        assertEq(returnData.length, 0);
+    }
+
+    /// A `context.length` of 2^59 or more asks the ABI decoder to reserve at
+    /// least 2^64 bytes of memory for the array, which it refuses with the
+    /// allocation panic before comparing the length against the calldata.
+    function testBuildCalldataContextLengthUnallocatableReverts(uint256 length) external {
+        bytes32 x = bytes32(uint256(42));
+        bytes memory payload = buildCalldata(words1(x), words1(x));
+        uint256 lengthOffset = contextLengthOffset(payload);
+        length = bound(length, 1 << 59, type(uint256).max);
+        setWord(payload, lengthOffset, bytes32(length));
+
+        //slither-disable-next-line low-level-calls
+        (bool success, bytes memory returnData) = address(this).call(payload);
+        assertFalse(success);
+        assertEq(returnData, stdError.memOverflowError);
+    }
+
+    /// A `context.length` that overstates the context but stays within the
+    /// calldata decodes: the words encoded behind the context, the signature
+    /// length and bytes, are read as context words. The presented context is
+    /// then longer than the signed one and `build` rejects it.
+    function testBuildCalldataContextLengthOverstatedWithinCalldataReverts(uint256 length) external {
+        bytes32 x = bytes32(uint256(42));
+        bytes memory payload = buildCalldata(words1(x), words1(x));
+        uint256 lengthOffset = contextLengthOffset(payload);
+        uint256 wordsToEnd = contextWordsToEnd(payload, lengthOffset);
+        assertGe(wordsToEnd, 4, "signature tail behind the context word");
+        length = bound(length, 2, wordsToEnd);
+        setWord(payload, lengthOffset, bytes32(length));
+
+        //slither-disable-next-line low-level-calls
+        (bool success, bytes memory returnData) = address(this).call(payload);
+        assertFalse(success);
+        assertEq(returnData, abi.encodeWithSelector(InvalidSignature.selector, uint256(0)));
+    }
+
+    /// A `context.length` of zero with a context word still encoded behind it
+    /// decodes: the word becomes trailing calldata. The presented context is
+    /// `[]`, so a signature over `[x]` is rejected.
+    function testBuildCalldataContextLengthUnderstatedSignatureOverLongerReverts() external {
+        bytes32 x = bytes32(uint256(42));
+        bytes memory payload = buildCalldata(words1(x), words1(x));
+        setWord(payload, contextLengthOffset(payload), bytes32(0));
+
+        //slither-disable-next-line low-level-calls
+        (bool success, bytes memory returnData) = address(this).call(payload);
+        assertFalse(success);
+        assertEq(returnData, abi.encodeWithSelector(InvalidSignature.selector, uint256(0)));
+    }
+
+    /// The same understated calldata with a signature over `[]` builds, and
+    /// the signed column is the empty context the decoder presented, not the
+    /// `[x]` that is encoded.
+    function testBuildCalldataContextLengthUnderstatedPresentsShorterContext() external {
+        bytes32 x = bytes32(uint256(42));
+        bytes memory payload = buildCalldata(words1(x), new bytes32[](0));
+        setWord(payload, contextLengthOffset(payload), bytes32(0));
+
+        //slither-disable-next-line low-level-calls
+        (bool success, bytes memory returnData) = address(this).call(payload);
+        assertTrue(success);
+        bytes32[][] memory context = abi.decode(returnData, (bytes32[][]));
+        assertEq(context.length, 3);
+        assertEq(context[2].length, 0);
     }
 }
