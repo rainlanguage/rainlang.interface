@@ -326,7 +326,6 @@ contract LibContextTest is Test {
         bytes memory payload = buildCalldata(words1(x), words1(x));
         assertEq(uint256(word(payload, contextLengthOffset(payload))), 1, "context length");
 
-        //slither-disable-next-line low-level-calls
         (bool success, bytes memory returnData) = address(this).call(payload);
         assertTrue(success);
         bytes32[][] memory context = abi.decode(returnData, (bytes32[][]));
@@ -347,7 +346,6 @@ contract LibContextTest is Test {
         length = bound(length, contextWordsToEnd(payload, lengthOffset) + 1, 1 << 58);
         setWord(payload, lengthOffset, bytes32(length));
 
-        //slither-disable-next-line low-level-calls
         (bool success, bytes memory returnData) = address(this).call(payload);
         assertFalse(success);
         assertEq(returnData.length, 0);
@@ -363,7 +361,6 @@ contract LibContextTest is Test {
         length = bound(length, 1 << 59, type(uint256).max);
         setWord(payload, lengthOffset, bytes32(length));
 
-        //slither-disable-next-line low-level-calls
         (bool success, bytes memory returnData) = address(this).call(payload);
         assertFalse(success);
         assertEq(returnData, stdError.memOverflowError);
@@ -382,7 +379,6 @@ contract LibContextTest is Test {
         length = bound(length, 2, wordsToEnd);
         setWord(payload, lengthOffset, bytes32(length));
 
-        //slither-disable-next-line low-level-calls
         (bool success, bytes memory returnData) = address(this).call(payload);
         assertFalse(success);
         assertEq(returnData, abi.encodeWithSelector(InvalidSignature.selector, uint256(0)));
@@ -396,7 +392,6 @@ contract LibContextTest is Test {
         bytes memory payload = buildCalldata(words1(x), words1(x));
         setWord(payload, contextLengthOffset(payload), bytes32(0));
 
-        //slither-disable-next-line low-level-calls
         (bool success, bytes memory returnData) = address(this).call(payload);
         assertFalse(success);
         assertEq(returnData, abi.encodeWithSelector(InvalidSignature.selector, uint256(0)));
@@ -410,7 +405,6 @@ contract LibContextTest is Test {
         bytes memory payload = buildCalldata(words1(x), new bytes32[](0));
         setWord(payload, contextLengthOffset(payload), bytes32(0));
 
-        //slither-disable-next-line low-level-calls
         (bool success, bytes memory returnData) = address(this).call(payload);
         assertTrue(success);
         bytes32[][] memory context = abi.decode(returnData, (bytes32[][]));
