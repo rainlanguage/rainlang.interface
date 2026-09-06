@@ -36,7 +36,7 @@ forge-std = "1.16.2"
 "rain-lib-typecast" = "0.1.4"
 "rain-math-binary" = "0.1.4"
 "rain-sol-codegen" = "0.1.36"
-"rain-solmem" = "0.1.26"
+"rain-solmem" = "0.1.28"
 
 [soldeer]
 recursive_deps = false
