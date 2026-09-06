@@ -6,7 +6,7 @@ import {LibHashNoAlloc, HASH_NIL} from "rain-lib-hash-0.1.0/src/LibHashNoAlloc.s
 import {LibCast} from "rain-lib-typecast-0.1.4/src/LibCast.sol";
 import {LibUint256Array} from "rain-solmem-0.1.26/src/lib/LibUint256Array.sol";
 
-import {SignedContextV1} from "src/interface/IInterpreterCallerV4.sol";
+import {SignedContextV1, SignedContextV2} from "src/interface/IInterpreterCallerV4.sol";
 
 library LibContextSlow {
     using LibUint256Array for uint256;
@@ -32,6 +32,41 @@ library LibContextSlow {
     }
 
     function buildStructureSlow(bytes32[][] memory baseContext, SignedContextV1[] memory signedContexts)
+        internal
+        view
+        returns (bytes32[][] memory)
+    {
+        uint256 signedLen = signedContexts.length > 0 ? signedContexts.length + 1 : 0;
+        bytes32[][] memory context = new bytes32[][](1 + baseContext.length + signedLen);
+        context[0] = new bytes32[](2);
+        context[0][0] = bytes32(uint256(uint160(address(msg.sender))));
+        context[0][1] = bytes32(uint256(uint160(address(this))));
+
+        uint256 offset = 1;
+        uint256 i = 0;
+        for (; i < baseContext.length; i++) {
+            context[i + offset] = baseContext[i];
+        }
+        offset = offset + i;
+
+        if (signedContexts.length > 0) {
+            bytes32[] memory signers = new bytes32[](signedContexts.length);
+            for (i = 0; i < signedContexts.length; i++) {
+                signers[i] = bytes32(uint256(uint160(signedContexts[i].signer)));
+            }
+            context[offset] = signers;
+            offset = offset + 1;
+
+            i = 0;
+            for (; i < signedContexts.length; i++) {
+                context[i + offset] = signedContexts[i].context;
+            }
+        }
+
+        return context;
+    }
+
+    function buildStructureSlow(bytes32[][] memory baseContext, SignedContextV2[] memory signedContexts)
         internal
         view
         returns (bytes32[][] memory)
