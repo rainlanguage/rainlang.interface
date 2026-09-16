@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {LibHashNoAlloc, HASH_NIL} from "rain-lib-hash-0.1.10/src/LibHashNoAlloc.sol";
+import {LibHashNoAlloc, HASH_NIL} from "rain-lib-hash-0.1.27/src/lib/LibHashNoAlloc.sol";
 
 import {SignatureChecker} from "@openzeppelin-contracts-5.6.1/utils/cryptography/SignatureChecker.sol";
 import {MessageHashUtils} from "@openzeppelin-contracts-5.6.1/utils/cryptography/MessageHashUtils.sol";
