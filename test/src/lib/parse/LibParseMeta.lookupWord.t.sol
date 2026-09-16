@@ -23,8 +23,14 @@ contract LibParseMetaLookupWordTest is Test {
     /// buildParseMetaV2 output must always pass structural validation.
     function testCheckParseMetaStructureBuildOutput() external pure {
         AuthoringMetaV2[] memory metas = new AuthoringMetaV2[](3);
+        // Casting a string literal that fits in 32 bytes, so it cannot truncate.
+        //forge-lint: disable-next-line(unsafe-typecast)
         metas[0] = AuthoringMetaV2({word: bytes32("add"), description: ""});
+        // Casting a string literal that fits in 32 bytes, so it cannot truncate.
+        //forge-lint: disable-next-line(unsafe-typecast)
         metas[1] = AuthoringMetaV2({word: bytes32("sub"), description: ""});
+        // Casting a string literal that fits in 32 bytes, so it cannot truncate.
+        //forge-lint: disable-next-line(unsafe-typecast)
         metas[2] = AuthoringMetaV2({word: bytes32("mul"), description: ""});
         bytes memory meta = LibGenParseMeta.buildParseMetaV2(metas, 8);
         LibParseMeta.checkParseMetaStructure(meta);
@@ -43,6 +49,8 @@ contract LibParseMetaLookupWordTest is Test {
     /// Truncated meta should fail validation.
     function testCheckParseMetaStructureTruncated() external {
         AuthoringMetaV2[] memory metas = new AuthoringMetaV2[](1);
+        // Casting a string literal that fits in 32 bytes, so it cannot truncate.
+        //forge-lint: disable-next-line(unsafe-typecast)
         metas[0] = AuthoringMetaV2({word: bytes32("add"), description: ""});
         bytes memory meta = LibGenParseMeta.buildParseMetaV2(metas, 8);
 
@@ -58,6 +66,8 @@ contract LibParseMetaLookupWordTest is Test {
     /// Extra trailing bytes should fail validation.
     function testCheckParseMetaStructureExtraBytes() external {
         AuthoringMetaV2[] memory metas = new AuthoringMetaV2[](1);
+        // Casting a string literal that fits in 32 bytes, so it cannot truncate.
+        //forge-lint: disable-next-line(unsafe-typecast)
         metas[0] = AuthoringMetaV2({word: bytes32("add"), description: ""});
         bytes memory meta = LibGenParseMeta.buildParseMetaV2(metas, 8);
 
@@ -86,6 +96,8 @@ contract LibParseMetaLookupWordTest is Test {
     /// This should return (false, 0) but currently returns (true, fakeIndex)
     /// because the bit-set check is missing.
     function testLookupWordMissingBitCheck() external pure {
+        // Casting a string literal that fits in 32 bytes, so it cannot truncate.
+        //forge-lint: disable-next-line(unsafe-typecast)
         bytes32 word = bytes32("notinmeta");
         uint8 seed = 0;
 
@@ -120,6 +132,8 @@ contract LibParseMetaLookupWordTest is Test {
         // Find the word's bit position.
         uint256 bitPos;
         for (uint256 i = 0; i < 256; i++) {
+            // Solidity << is value then shift amount, so 1 << n is the correct order.
+            //forge-lint: disable-next-line(incorrect-shift)
             if (shifted == (1 << i)) {
                 bitPos = i;
                 break;
@@ -129,6 +143,8 @@ contract LibParseMetaLookupWordTest is Test {
         // Pick a different bit ABOVE the word's bit so ctpop gives pos = 0.
         // Wrap around if needed — the key requirement is the bit differs.
         uint256 fakeBitPos = (bitPos + 128) % 256;
+        // Solidity << is value then shift amount, so 1 << n is the correct order.
+        //forge-lint: disable-next-line(incorrect-shift)
         uint256 fakeExpansion = 1 << fakeBitPos;
 
         // Determine what pos lookupWord will compute:
@@ -151,14 +167,22 @@ contract LibParseMetaLookupWordTest is Test {
         meta[itemOffset] = bytes1(uint8(42));
         meta[itemOffset + 1] = bytes1(uint8((wordFingerprint >> 16) & 0xFF));
         meta[itemOffset + 2] = bytes1(uint8((wordFingerprint >> 8) & 0xFF));
+        // Masked to 8 bits before the cast, so it cannot truncate.
+        //forge-lint: disable-next-line(unsafe-typecast)
         meta[itemOffset + 3] = bytes1(uint8(wordFingerprint & 0xFF));
     }
 
     /// Build meta from known words, look them all up, verify indices.
     function testLookupWordKnown() external pure {
         AuthoringMetaV2[] memory metas = new AuthoringMetaV2[](3);
+        // Casting a string literal that fits in 32 bytes, so it cannot truncate.
+        //forge-lint: disable-next-line(unsafe-typecast)
         metas[0] = AuthoringMetaV2({word: bytes32("add"), description: ""});
+        // Casting a string literal that fits in 32 bytes, so it cannot truncate.
+        //forge-lint: disable-next-line(unsafe-typecast)
         metas[1] = AuthoringMetaV2({word: bytes32("sub"), description: ""});
+        // Casting a string literal that fits in 32 bytes, so it cannot truncate.
+        //forge-lint: disable-next-line(unsafe-typecast)
         metas[2] = AuthoringMetaV2({word: bytes32("mul"), description: ""});
 
         bytes memory meta = LibGenParseMeta.buildParseMetaV2(metas, 8);
@@ -173,10 +197,14 @@ contract LibParseMetaLookupWordTest is Test {
     /// Looking up a word not in meta should return false with index 0.
     function testLookupWordNotFound() external pure {
         AuthoringMetaV2[] memory metas = new AuthoringMetaV2[](1);
+        // Casting a string literal that fits in 32 bytes, so it cannot truncate.
+        //forge-lint: disable-next-line(unsafe-typecast)
         metas[0] = AuthoringMetaV2({word: bytes32("add"), description: ""});
 
         bytes memory meta = LibGenParseMeta.buildParseMetaV2(metas, 8);
 
+        // Casting a string literal that fits in 32 bytes, so it cannot truncate.
+        //forge-lint: disable-next-line(unsafe-typecast)
         (bool exists, uint256 index) = LibParseMeta.lookupWord(meta, bytes32("notaword"));
         assertFalse(exists);
         assertEq(index, 0);
@@ -185,15 +213,21 @@ contract LibParseMetaLookupWordTest is Test {
     /// Single-depth meta with a single word.
     function testLookupWordSingleDepth() external pure {
         AuthoringMetaV2[] memory metas = new AuthoringMetaV2[](1);
+        // Casting a string literal that fits in 32 bytes, so it cannot truncate.
+        //forge-lint: disable-next-line(unsafe-typecast)
         metas[0] = AuthoringMetaV2({word: bytes32("only"), description: ""});
 
         bytes memory meta = LibGenParseMeta.buildParseMetaV2(metas, 1);
 
+        // Casting a string literal that fits in 32 bytes, so it cannot truncate.
+        //forge-lint: disable-next-line(unsafe-typecast)
         (bool exists, uint256 index) = LibParseMeta.lookupWord(meta, bytes32("only"));
         assertTrue(exists);
         assertEq(index, 0);
 
         // Not-found on single-depth meta.
+        // Casting a string literal that fits in 32 bytes, so it cannot truncate.
+        //forge-lint: disable-next-line(unsafe-typecast)
         (bool notExists,) = LibParseMeta.lookupWord(meta, bytes32("other"));
         assertFalse(notExists);
     }
@@ -201,11 +235,19 @@ contract LibParseMetaLookupWordTest is Test {
     /// Multiple not-found lookups should all return false.
     function testLookupWordMultipleNotFound(bytes32 a, bytes32 b, bytes32 c) external pure {
         AuthoringMetaV2[] memory metas = new AuthoringMetaV2[](1);
+        // Casting a string literal that fits in 32 bytes, so it cannot truncate.
+        //forge-lint: disable-next-line(unsafe-typecast)
         metas[0] = AuthoringMetaV2({word: bytes32("known"), description: ""});
 
         // Ensure fuzzed words differ from the known word.
+        // Casting a string literal that fits in 32 bytes, so it cannot truncate.
+        //forge-lint: disable-next-line(unsafe-typecast)
         vm.assume(a != bytes32("known"));
+        // Casting a string literal that fits in 32 bytes, so it cannot truncate.
+        //forge-lint: disable-next-line(unsafe-typecast)
         vm.assume(b != bytes32("known"));
+        // Casting a string literal that fits in 32 bytes, so it cannot truncate.
+        //forge-lint: disable-next-line(unsafe-typecast)
         vm.assume(c != bytes32("known"));
 
         bytes memory meta = LibGenParseMeta.buildParseMetaV2(metas, 3);
@@ -254,6 +296,8 @@ contract LibParseMetaLookupWordTest is Test {
         meta[itemOffset] = bytes1(opcodeIndex);
         meta[itemOffset + 1] = bytes1(uint8((fingerprint >> 16) & 0xFF));
         meta[itemOffset + 2] = bytes1(uint8((fingerprint >> 8) & 0xFF));
+        // Masked to 8 bits before the cast, so it cannot truncate.
+        //forge-lint: disable-next-line(unsafe-typecast)
         meta[itemOffset + 3] = bytes1(uint8(fingerprint & 0xFF));
     }
 
@@ -283,6 +327,8 @@ contract LibParseMetaLookupWordTest is Test {
     ///   layer and adds cumulativeCt 1 (one bit set at depth 0), so it reads
     ///   item slot 1 and returns (true, 7).
     function testLookupWordCollisionDescent() external pure {
+        // Casting a string literal that fits in 32 bytes, so it cannot truncate.
+        //forge-lint: disable-next-line(unsafe-typecast)
         bytes32 word = bytes32("descend");
         bytes memory meta = new bytes(META_PREFIX_SIZE + 2 * META_EXPANSION_SIZE + 2 * META_ITEM_SIZE);
 
@@ -326,6 +372,8 @@ contract LibParseMetaLookupWordTest is Test {
     /// matches must miss once the loop runs past the last layer. The descent
     /// visits both layers and the post-loop return yields (false, 0).
     function testLookupWordDescendThenMiss() external pure {
+        // Casting a string literal that fits in 32 bytes, so it cannot truncate.
+        //forge-lint: disable-next-line(unsafe-typecast)
         bytes32 word = bytes32("nomatch");
         bytes memory meta = new bytes(META_PREFIX_SIZE + 2 * META_EXPANSION_SIZE + 2 * META_ITEM_SIZE);
 
