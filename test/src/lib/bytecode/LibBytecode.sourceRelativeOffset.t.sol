@@ -101,7 +101,11 @@ contract LibBytecodeSourceRelativeOffsetTest is BytecodeTest {
         // count = 1, single offset taken from the fuzzed high value.
         bytes memory bytecode = new bytes(3);
         bytecode[0] = bytes1(uint8(1));
+        // offset is uint16 so its high byte always fits in uint8.
+        //forge-lint: disable-next-line(unsafe-typecast)
         bytecode[1] = bytes1(uint8(offset >> 8));
+        // Writing the low byte of a 16 bit offset, so truncating is the intent.
+        //forge-lint: disable-next-line(unsafe-typecast)
         bytecode[2] = bytes1(uint8(offset));
         assertEq(LibBytecode.sourceRelativeOffset(bytecode, 0), offset);
         assertEq(LibBytecode.sourceRelativeOffset(bytecode, 0), LibBytecodeSlow.sourceRelativeOffsetSlow(bytecode, 0));

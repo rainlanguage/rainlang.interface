@@ -14,10 +14,10 @@ integrity = "5fb4325b60d7d4194bd0481e2f94398cf1d9c6561dd12a66fb2748ef4a68205f"
 
 [[dependencies]]
 name = "rain-lib-hash"
-version = "0.1.0"
-url = "https://soldeer-revisions.s3.amazonaws.com/rain-lib-hash/0_1_0_12-05-2026_16:24:56_rain.lib.zip"
-checksum = "648f3e38b297dbd3ecb32b82c8b24c322f484e1734eb50fd393bc547c72b59b0"
-integrity = "91f5f679a0a27f096fdbc1e41195dd9f42cacfab15735efeb1101cc1b9215b47"
+version = "0.1.27"
+url = "https://soldeer-revisions.s3.amazonaws.com/rain-lib-hash/0_1_27_16-09-2026_11:52:52_rain.lib.zip"
+checksum = "7a25602d78180e82ac330d1f1b44609589e8efa42d7a3553f926445dbda64256"
+integrity = "ba9fc2ff053bf801fc1b05e5b192fe5b8ade545c408f33874f473bfc39d2d3f0"
 
 [[dependencies]]
 name = "rain-lib-typecast"
@@ -35,14 +35,14 @@ integrity = "857d22060d058ec173e88448c2d44f0cb884b2381669d0dbe1d3bebb168715ea"
 
 [[dependencies]]
 name = "rain-sol-codegen"
-version = "0.1.36"
-url = "https://soldeer-revisions.s3.amazonaws.com/rain-sol-codegen/0_1_36_18-08-2026_09:20:33_rain.sol.zip"
-checksum = "b5d101d46941a95fee441224e101004139814ae9afa2793138874bd7e93991ff"
-integrity = "164e2655ac8b66bcf52c799421706d3dfaab987addaaeadd74574e70fd2eb6ed"
+version = "0.1.37"
+url = "https://soldeer-revisions.s3.amazonaws.com/rain-sol-codegen/0_1_37_25-08-2026_17:26:08_rain.sol.zip"
+checksum = "d13ebfc9e769dcd96bf43bd5e0ff9c2894f877949ce5492ae985e70ea10f30b2"
+integrity = "0044af31422ea2e98c480e61c7eba091fbe3bd72c6bc9dcddd3b7457aa6d22f4"
 
 [[dependencies]]
 name = "rain-solmem"
-version = "0.1.26"
-url = "https://soldeer-revisions.s3.amazonaws.com/rain-solmem/0_1_26_18-08-2026_16:20:17_rain.zip"
-checksum = "291a0acf805b8acd65dfb9e848e6670bde158120bb5b0bcdeeaf17c4084a134c"
-integrity = "54e56c1b10d05df72c1c3dcc8df92b99b9f01cd946363158b077c779ce4d20fa"
+version = "0.1.28"
+url = "https://soldeer-revisions.s3.amazonaws.com/rain-solmem/0_1_28_03-09-2026_07:34:16_rain.zip"
+checksum = "3dafbef001edb181683a43c3c295e3f88e2ffcedd751e986562e71e29560c9f0"
+integrity = "e7508cd81a998a67118a0fca314d504dc62850d6b535d29c824f696f214e4b23"

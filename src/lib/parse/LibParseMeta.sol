@@ -159,6 +159,8 @@ library LibParseMeta {
                     // is not in the set. No word was mapped to this bit, so
                     // there is nothing to collide with at any depth.
                     if (expansion & shifted == 0) {
+                        // The literal is this function's found/not-found return value, not a condition operand.
+                        //forge-lint: disable-next-line(boolean-cst)
                         return (false, 0);
                     }
 
@@ -176,11 +178,15 @@ library LibParseMeta {
                     assembly ("memory-safe") {
                         index := byte(28, posData)
                     }
+                    // The literal is this function's found/not-found return value, not a condition operand.
+                    //forge-lint: disable-next-line(boolean-cst)
                     return (true, index);
                 } else {
                     cumulativeCt += LibCtPop.ctpop(expansion);
                 }
             }
+            // The literal is this function's found/not-found return value, not a condition operand.
+            //forge-lint: disable-next-line(boolean-cst)
             return (false, 0);
         }
     }

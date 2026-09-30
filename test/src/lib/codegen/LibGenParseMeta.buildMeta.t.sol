@@ -21,6 +21,8 @@ contract LibGenParseMetaBuildMetaTest is Test {
     /// 4-byte items). Previously the constant was (1 << 4) - 1 = 0xF which
     /// is only 4 bits.
     function testMetaItemMask() external pure {
+        // Solidity << is value then shift amount, so 1 << n is the correct order.
+        //forge-lint: disable-next-line(incorrect-shift)
         assertEq(META_ITEM_MASK, (1 << (META_ITEM_SIZE * 8)) - 1);
         assertEq(META_ITEM_MASK, type(uint32).max);
     }
@@ -175,8 +177,14 @@ contract LibGenParseMetaBuildMetaTest is Test {
     /// correct indices.
     function testParseMetaConstantStringRoundtrip() external pure {
         AuthoringMetaV2[] memory metas = new AuthoringMetaV2[](3);
+        // Casting a string literal that fits in 32 bytes, so it cannot truncate.
+        //forge-lint: disable-next-line(unsafe-typecast)
         metas[0] = AuthoringMetaV2({word: bytes32("add"), description: "Add two numbers"});
+        // Casting a string literal that fits in 32 bytes, so it cannot truncate.
+        //forge-lint: disable-next-line(unsafe-typecast)
         metas[1] = AuthoringMetaV2({word: bytes32("sub"), description: "Subtract"});
+        // Casting a string literal that fits in 32 bytes, so it cannot truncate.
+        //forge-lint: disable-next-line(unsafe-typecast)
         metas[2] = AuthoringMetaV2({word: bytes32("mul"), description: "Multiply"});
 
         bytes memory encoded = abi.encode(metas);
@@ -208,6 +216,8 @@ contract LibGenParseMetaBuildMetaTest is Test {
     /// built internally should correctly look up that word.
     function testParseMetaConstantStringSingleWord() external pure {
         AuthoringMetaV2[] memory metas = new AuthoringMetaV2[](1);
+        // Casting a string literal that fits in 32 bytes, so it cannot truncate.
+        //forge-lint: disable-next-line(unsafe-typecast)
         metas[0] = AuthoringMetaV2({word: bytes32("only"), description: "The only word"});
 
         bytes memory encoded = abi.encode(metas);
@@ -216,6 +226,8 @@ contract LibGenParseMetaBuildMetaTest is Test {
         assertTrue(bytes(result).length > 0);
 
         bytes memory parseMeta = LibGenParseMeta.buildParseMetaV2(metas, 1);
+        // Casting a string literal that fits in 32 bytes, so it cannot truncate.
+        //forge-lint: disable-next-line(unsafe-typecast)
         (bool exists, uint256 index) = LibParseMeta.lookupWord(parseMeta, bytes32("only"));
         assertTrue(exists);
         assertEq(index, 0);
@@ -225,7 +237,11 @@ contract LibGenParseMetaBuildMetaTest is Test {
     /// input, and the underlying parse meta should remain functional.
     function testParseMetaConstantStringBuildDepths() external pure {
         AuthoringMetaV2[] memory metas = new AuthoringMetaV2[](2);
+        // Casting a string literal that fits in 32 bytes, so it cannot truncate.
+        //forge-lint: disable-next-line(unsafe-typecast)
         metas[0] = AuthoringMetaV2({word: bytes32("foo"), description: ""});
+        // Casting a string literal that fits in 32 bytes, so it cannot truncate.
+        //forge-lint: disable-next-line(unsafe-typecast)
         metas[1] = AuthoringMetaV2({word: bytes32("bar"), description: ""});
 
         bytes memory encoded = abi.encode(metas);
