@@ -99,7 +99,18 @@ library LibSignedContextV2TypedData {
         pure
         returns (bytes memory)
     {
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest(domain, vm.addr(privateKey), context));
+        return signFor(privateKey, domain, vm.addr(privateKey), context);
+    }
+
+    /// An EOA signature by `privateKey` over `digest(domain, signer, context)`,
+    /// for a `signer` that is not necessarily `vm.addr(privateKey)`: the shape
+    /// an ERC-1271 account's owner key produces for the account.
+    function signFor(uint256 privateKey, EIP712Domain memory domain, address signer, bytes32[] memory context)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest(domain, signer, context));
         return abi.encodePacked(r, s, v);
     }
 }

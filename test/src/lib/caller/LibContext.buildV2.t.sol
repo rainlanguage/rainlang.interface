@@ -3,9 +3,22 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.16.2/src/Test.sol";
-import {LibContext, MessageHashUtils, SignedContextV1, InvalidSignature} from "src/lib/caller/LibContext.sol";
+import {IERC1271} from "@openzeppelin-contracts-5.6.1/interfaces/IERC1271.sol";
+import {
+    LibContext,
+    MessageHashUtils,
+    SignedContextV1,
+    InvalidSignature,
+    CONTEXT_BASE_COLUMN,
+    CONTEXT_BASE_ROWS,
+    CONTEXT_BASE_V2_ROWS,
+    CONTEXT_BASE_ROW_SENDER,
+    CONTEXT_BASE_ROW_CALLING_CONTRACT,
+    CONTEXT_BASE_ROW_DOMAIN_SEPARATOR
+} from "src/lib/caller/LibContext.sol";
 import {SignedContextV2} from "src/interface/IInterpreterCallerV4.sol";
 import {LibSignedContextV2TypedData, EIP712Domain} from "test/lib/caller/LibSignedContextV2TypedData.sol";
+import {ERC1271WalletMock} from "test/lib/caller/ERC1271WalletMock.sol";
 import {LibContextSlow} from "./LibContextSlow.sol";
 
 contract LibContextBuildV2Test is Test {
@@ -103,7 +116,7 @@ contract LibContextBuildV2Test is Test {
         SignedContextV2[] memory signedContexts = signedContextsFor(SIGNER_PK, words);
 
         bytes32[][] memory actual = LibContext.buildV2(base, signedContexts, signingDomainSeparator());
-        assertEqContext(LibContextSlow.buildStructureSlow(base, signedContexts), actual);
+        assertEqContext(LibContextSlow.buildStructureSlow(base, signedContexts, signingDomainSeparator()), actual);
 
         assertEq(actual.length, 1 + base.length + 2);
         assertEq(actual[1 + base.length], words1(bytes32(uint256(uint160(vm.addr(SIGNER_PK))))));
@@ -118,7 +131,9 @@ contract LibContextBuildV2Test is Test {
         signedContexts[1] = signedContextsFor(OTHER_PK, words1(z))[0];
 
         bytes32[][] memory actual = LibContext.buildV2(new bytes32[][](0), signedContexts, signingDomainSeparator());
-        assertEqContext(LibContextSlow.buildStructureSlow(new bytes32[][](0), signedContexts), actual);
+        assertEqContext(
+            LibContextSlow.buildStructureSlow(new bytes32[][](0), signedContexts, signingDomainSeparator()), actual
+        );
 
         assertEq(actual.length, 4);
         assertEq(
@@ -129,17 +144,175 @@ contract LibContextBuildV2Test is Test {
         assertEq(actual[3], words1(z));
     }
 
-    /// With no signed contexts the domain separator plays no part and the
-    /// result is the base context plus the caller's columns, as `build`
-    /// returns it.
+    /// With no signed contexts nothing is verified and the result is the base
+    /// context plus the caller's columns, as `build` returns it, except that
+    /// the base column still carries the domain separator as its third row.
     /// forge-config: default.fuzz.runs = 100
     function testBuildV2ZeroSignedContexts(bytes32[][] memory base, bytes32 anyDomainSeparator) external view {
         SignedContextV2[] memory signedContexts = new SignedContextV2[](0);
 
         bytes32[][] memory actual = LibContext.buildV2(base, signedContexts, anyDomainSeparator);
-        assertEqContext(LibContextSlow.buildStructureSlow(base, signedContexts), actual);
-        assertEqContext(LibContext.build(base, new SignedContextV1[](0)), actual);
+        assertEqContext(LibContextSlow.buildStructureSlow(base, signedContexts, anyDomainSeparator), actual);
         assertEq(actual.length, 1 + base.length);
+
+        bytes32[][] memory v1 = LibContext.build(base, new SignedContextV1[](0));
+        assertEq(v1.length, actual.length);
+        assertEq(v1[0].length, CONTEXT_BASE_ROWS);
+        assertEq(actual[0].length, CONTEXT_BASE_V2_ROWS);
+        assertEq(actual[0][CONTEXT_BASE_ROW_SENDER], v1[0][CONTEXT_BASE_ROW_SENDER]);
+        assertEq(actual[0][CONTEXT_BASE_ROW_CALLING_CONTRACT], v1[0][CONTEXT_BASE_ROW_CALLING_CONTRACT]);
+        assertEq(actual[0][CONTEXT_BASE_ROW_DOMAIN_SEPARATOR], anyDomainSeparator);
+        for (uint256 i = 1; i < v1.length; i++) {
+            assertEq(v1[i], actual[i]);
+        }
+    }
+
+    /// `baseV2` is `base` with the domain separator appended as the third
+    /// row, and the constants name its shape.
+    function testBaseV2(bytes32 domainSeparator) external view {
+        bytes32[] memory base = LibContext.base();
+        bytes32[] memory baseV2 = LibContext.baseV2(domainSeparator);
+
+        assertEq(CONTEXT_BASE_COLUMN, 0);
+        assertEq(CONTEXT_BASE_V2_ROWS, CONTEXT_BASE_ROWS + 1);
+        assertEq(CONTEXT_BASE_ROW_DOMAIN_SEPARATOR, CONTEXT_BASE_ROWS);
+
+        assertEq(base.length, CONTEXT_BASE_ROWS);
+        assertEq(baseV2.length, CONTEXT_BASE_V2_ROWS);
+        assertEq(baseV2[CONTEXT_BASE_ROW_SENDER], base[CONTEXT_BASE_ROW_SENDER]);
+        assertEq(baseV2[CONTEXT_BASE_ROW_SENDER], bytes32(uint256(uint160(msg.sender))));
+        assertEq(baseV2[CONTEXT_BASE_ROW_CALLING_CONTRACT], base[CONTEXT_BASE_ROW_CALLING_CONTRACT]);
+        assertEq(baseV2[CONTEXT_BASE_ROW_CALLING_CONTRACT], bytes32(uint256(uint160(address(this)))));
+        assertEq(baseV2[CONTEXT_BASE_ROW_DOMAIN_SEPARATOR], domainSeparator);
+    }
+
+    /// `baseV2` allocates exactly its three words: the free memory pointer
+    /// advances by the array's length word plus three rows, and the array
+    /// starts where the pointer was.
+    function testBaseV2Allocates(bytes32 domainSeparator) external view {
+        uint256 freeMemoryPointerBefore;
+        assembly ("memory-safe") {
+            freeMemoryPointerBefore := mload(0x40)
+        }
+        bytes32[] memory baseV2 = LibContext.baseV2(domainSeparator);
+        uint256 freeMemoryPointerAfter;
+        uint256 baseV2Pointer;
+        assembly ("memory-safe") {
+            freeMemoryPointerAfter := mload(0x40)
+            baseV2Pointer := baseV2
+        }
+        assertEq(baseV2Pointer, freeMemoryPointerBefore);
+        assertEq(freeMemoryPointerAfter, freeMemoryPointerBefore + 0x20 * (1 + CONTEXT_BASE_V2_ROWS));
+    }
+
+    /// The domain separator row of a built context is the domain separator
+    /// the signed contexts were verified under, at a fixed coordinate however
+    /// many caller columns and signed contexts there are. An expression that
+    /// pins `context<0 2>()` to its deployment's domain separator therefore
+    /// pins the domain every signer in the matrix signed under.
+    /// forge-config: default.fuzz.runs = 100
+    function testBuildV2ExposesVerifiedDomainSeparator(bytes32[][] memory base, bytes32 x, bytes32 y, bytes32 z)
+        external
+        view
+    {
+        SignedContextV2[] memory signedContexts = new SignedContextV2[](2);
+        signedContexts[0] = signedContextsFor(SIGNER_PK, words2(x, y))[0];
+        signedContexts[1] = signedContextsFor(OTHER_PK, words1(z))[0];
+
+        bytes32[][] memory actual = LibContext.buildV2(base, signedContexts, signingDomainSeparator());
+        assertEq(actual.length, 1 + base.length + 3);
+        assertEq(actual[CONTEXT_BASE_COLUMN].length, CONTEXT_BASE_V2_ROWS);
+        assertEq(actual[CONTEXT_BASE_COLUMN][CONTEXT_BASE_ROW_DOMAIN_SEPARATOR], signingDomainSeparator());
+        // The caller's columns are not shifted by the extra base row.
+        for (uint256 i = 0; i < base.length; i++) {
+            assertEq(actual[1 + i], base[i]);
+        }
+    }
+
+    /// The domain separator row is exactly the separator `buildV2` was given,
+    /// not derived from anything else. With the signed contexts signed under
+    /// that same separator this is the only value the row can hold, because
+    /// any other separator does not verify
+    /// (`testBuildV2DifferentDomainSeparatorReverts`).
+    function testBuildV2DomainSeparatorRowIsTheVerifyingSeparator(
+        bytes32[] memory words,
+        uint64 chainId,
+        address verifyingContract
+    ) external view {
+        words = bounded(words);
+        EIP712Domain memory signingDomain = EIP712Domain("LibContextBuildV2Test", "1", chainId, verifyingContract);
+        bytes32 domainSeparator = LibSignedContextV2TypedData.domainSeparator(signingDomain);
+        SignedContextV2[] memory signedContexts = signedContextsFor(SIGNER_PK, signingDomain, words, words);
+
+        bytes32[][] memory actual = LibContext.buildV2(new bytes32[][](0), signedContexts, domainSeparator);
+        assertEq(actual[CONTEXT_BASE_COLUMN][CONTEXT_BASE_ROW_DOMAIN_SEPARATOR], domainSeparator);
+        assertEq(actual[2], words);
+    }
+
+    /// An ERC-1271 contract account whose owner key signed the digest naming
+    /// the account as `signer` verifies, and the signers column shows the
+    /// account, not the owner key.
+    function testBuildV2ERC1271SignerBuilds(bytes32[] memory words) external {
+        words = bounded(words);
+        ERC1271WalletMock wallet = new ERC1271WalletMock(vm.addr(SIGNER_PK));
+
+        SignedContextV2[] memory signedContexts = new SignedContextV2[](1);
+        signedContexts[0] = SignedContextV2({
+            signer: address(wallet),
+            context: words,
+            signature: LibSignedContextV2TypedData.signFor(SIGNER_PK, domain(), address(wallet), words)
+        });
+
+        bytes32[][] memory actual = this.buildV2External(new bytes32[][](0), signedContexts, signingDomainSeparator());
+        assertEq(actual.length, 3);
+        assertEq(actual[1], words1(bytes32(uint256(uint160(address(wallet))))));
+        assertEq(actual[2], words);
+    }
+
+    /// An ERC-1271 signature is checked onchain, so the account can revoke
+    /// it: the same signed context that built before the account revoked does
+    /// not verify after.
+    function testBuildV2ERC1271RevokedReverts(bytes32[] memory words) external {
+        words = bounded(words);
+        ERC1271WalletMock wallet = new ERC1271WalletMock(vm.addr(SIGNER_PK));
+
+        SignedContextV2[] memory signedContexts = new SignedContextV2[](1);
+        signedContexts[0] = SignedContextV2({
+            signer: address(wallet),
+            context: words,
+            signature: LibSignedContextV2TypedData.signFor(SIGNER_PK, domain(), address(wallet), words)
+        });
+        assertEq(this.buildV2External(new bytes32[][](0), signedContexts, signingDomainSeparator()).length, 3);
+
+        wallet.revoke();
+        vm.expectRevert(abi.encodeWithSelector(InvalidSignature.selector, uint256(0)));
+        this.buildV2External(new bytes32[][](0), signedContexts, signingDomainSeparator());
+    }
+
+    /// Two ERC-1271 accounts with the same owner key accept the same
+    /// `(digest, signature)` pairs, so a signature account A's owner produced
+    /// for A would also satisfy account B if the digest did not name the
+    /// account. `signer` is in the signed data, so the digest for A presented
+    /// as B's does not verify: the signers column cannot show B vouching for
+    /// words only A's owner signed for A.
+    function testBuildV2ERC1271SharedOwnerDoesNotCrossAccounts(bytes32[] memory words) external {
+        words = bounded(words);
+        ERC1271WalletMock walletA = new ERC1271WalletMock(vm.addr(SIGNER_PK));
+        ERC1271WalletMock walletB = new ERC1271WalletMock(vm.addr(SIGNER_PK));
+        bytes memory signatureForA = LibSignedContextV2TypedData.signFor(SIGNER_PK, domain(), address(walletA), words);
+
+        // B would accept A's digest and signature if asked directly: the two
+        // accounts share a validator.
+        bytes32 digestForA = LibSignedContextV2TypedData.digest(domain(), address(walletA), words);
+        assertEq(walletB.isValidSignature(digestForA, signatureForA), IERC1271.isValidSignature.selector);
+
+        SignedContextV2[] memory signedContexts = new SignedContextV2[](1);
+        signedContexts[0] = SignedContextV2({signer: address(walletA), context: words, signature: signatureForA});
+        assertEq(this.buildV2External(new bytes32[][](0), signedContexts, signingDomainSeparator()).length, 3);
+
+        signedContexts[0].signer = address(walletB);
+        vm.expectRevert(abi.encodeWithSelector(InvalidSignature.selector, uint256(0)));
+        this.buildV2External(new bytes32[][](0), signedContexts, signingDomainSeparator());
     }
 
     /// First signature valid, second invalid: the revert names index 1.

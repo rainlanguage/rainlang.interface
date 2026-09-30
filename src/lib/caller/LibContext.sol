@@ -34,6 +34,16 @@ uint256 constant CONTEXT_BASE_ROW_SENDER = 0;
 /// context.
 uint256 constant CONTEXT_BASE_ROW_CALLING_CONTRACT = 1;
 
+/// @dev CONTEXT_BASE_V2_ROWS is the number of rows in the base context
+/// provided by `LibContext.baseV2()` and built by `LibContext.buildV2()`,
+/// which is always 3 for the `msg.sender`, the address of the calling
+/// contract and the EIP-712 domain separator the signed contexts were
+/// verified under. Rows 0 and 1 are as `LibContext.base()`.
+uint256 constant CONTEXT_BASE_V2_ROWS = 3;
+/// @dev The row index of the EIP-712 domain separator in the base context
+/// built by `LibContext.buildV2()`.
+uint256 constant CONTEXT_BASE_ROW_DOMAIN_SEPARATOR = 2;
+
 /// @title LibContext
 /// @notice Conventions for working with context as a calling contract. All of
 /// this functionality is OPTIONAL but probably useful for the majority of use
@@ -66,6 +76,34 @@ library LibContext {
             mstore(add(baseArray, 0x20), caller())
             mstore(add(baseArray, 0x40), address())
             mstore(0x40, add(baseArray, 0x60))
+        }
+    }
+
+    /// The base context of `buildV2`: `LibContext.base()` with the EIP-712
+    /// domain separator of the calling contract appended as a third row. The
+    /// domain separator is exposed so that an expression can pin the domain
+    /// its signed contexts MUST have been signed under, e.g. by comparing
+    /// `context<0 2>()` to a literal. Every signed context `buildV2` merges
+    /// into the same matrix was verified under exactly this domain separator,
+    /// so an expression that checks it knows which deployment's domain every
+    /// signer in the signers column vouched under.
+    ///
+    /// Calling contracts DO NOT need to call this directly. It is built and
+    /// merged automatically into the standard context built by `buildV2`.
+    ///
+    /// @param domainSeparator The EIP-712 domain separator of the calling
+    /// contract, as passed to `buildV2`.
+    /// @return baseArray The `msg.sender`, address of the calling contract
+    /// using this library and `domainSeparator`, as a context-compatible
+    /// array.
+    function baseV2(bytes32 domainSeparator) internal view returns (bytes32[] memory baseArray) {
+        assembly ("memory-safe") {
+            baseArray := mload(0x40)
+            mstore(baseArray, 3)
+            mstore(add(baseArray, 0x20), caller())
+            mstore(add(baseArray, 0x40), address())
+            mstore(add(baseArray, 0x60), domainSeparator)
+            mstore(0x40, add(baseArray, 0x80))
         }
     }
 
@@ -250,16 +288,27 @@ library LibContext {
     /// Builds a standard 2-dimensional context array from base, calling and
     /// signed contexts, as `build` does, with each `SignedContextV2` verified
     /// as EIP-712 typed data under `domainSeparator`. The returned matrix has
-    /// the same layout as `build`: column 0 is `LibContext.base()`, then the
-    /// `baseContext` columns, then (only if there are signed contexts) a
+    /// the same column layout as `build`: column 0 is the base context, then
+    /// the `baseContext` columns, then (only if there are signed contexts) a
     /// column of the signers in order and one column per signed context.
+    ///
+    /// The one difference from `build` is column 0: it is
+    /// `LibContext.baseV2(domainSeparator)`, which is `LibContext.base()` with
+    /// `domainSeparator` as a third row (`CONTEXT_BASE_ROW_DOMAIN_SEPARATOR`).
+    /// This is the domain every signed context in the matrix was verified
+    /// under, exposed so the expression can pin it: an expression that
+    /// requires `context<0 2>()` to equal its deployment's domain separator
+    /// does not accept a context built by a calling contract with a different
+    /// domain, even one the same signers signed for. The row is present
+    /// whether or not there are any signed contexts, so its coordinate is
+    /// fixed.
     ///
     /// @param baseContext Anything the calling contract can provide which MAY
     /// include input from the `msg.sender` of the calling contract. The default
-    /// base context from `LibContext.base()` DOES NOT need to be provided by the
-    /// caller, this matrix MAY be empty and will be simply merged into the final
-    /// context. The base context matrix MUST contain a consistent number of
-    /// columns from the calling contract so that the expression can always
+    /// base context from `LibContext.baseV2()` DOES NOT need to be provided by
+    /// the caller, this matrix MAY be empty and will be simply merged into the
+    /// final context. The base context matrix MUST contain a consistent number
+    /// of columns from the calling contract so that the expression can always
     /// predict how many unsigned columns there will be when it runs.
     /// @param signedContexts Signed contexts are provided by the `msg.sender`
     /// but signed by a third party. Each signature is verified for its
@@ -276,8 +325,10 @@ library LibContext {
     /// @param domainSeparator The EIP-712 domain separator of the calling
     /// contract. This library computes no domain and fixes no domain fields.
     /// The same signed data under a different domain separator does not
-    /// verify.
-    /// @return The fully assembled context matrix, laid out as `build`.
+    /// verify. Exposed to the expression as row
+    /// `CONTEXT_BASE_ROW_DOMAIN_SEPARATOR` of column `CONTEXT_BASE_COLUMN`.
+    /// @return The fully assembled context matrix, laid out as `build` with
+    /// the domain separator as the third row of column 0.
     function buildV2(bytes32[][] memory baseContext, SignedContextV2[] memory signedContexts, bytes32 domainSeparator)
         internal
         view
@@ -286,13 +337,13 @@ library LibContext {
         unchecked {
             bytes32[] memory signers = new bytes32[](signedContexts.length);
 
-            // - LibContext.base() + whatever we are provided.
+            // - LibContext.baseV2() + whatever we are provided.
             // - signed contexts + signers if they exist else nothing.
             uint256 contextLength = 1 + baseContext.length + (signedContexts.length > 0 ? signedContexts.length + 1 : 0);
 
             bytes32[][] memory context = new bytes32[][](contextLength);
             uint256 offset = 0;
-            context[offset] = LibContext.base();
+            context[offset] = LibContext.baseV2(domainSeparator);
 
             for (uint256 i = 0; i < baseContext.length; i++) {
                 offset++;

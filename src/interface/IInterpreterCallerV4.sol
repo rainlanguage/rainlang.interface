@@ -47,7 +47,9 @@ bytes32 constant SIGNED_CONTEXT_V2_TYPEHASH = keccak256("SignedContextV2(address
 /// contract, passed by it to `LibContext.buildV2`. The calling contract chooses
 /// its domain (which fields it has and their values) and MAY publish it per
 /// ERC-5267; the same signed data under a different domain separator does not
-/// verify.
+/// verify. `LibContext.buildV2` exposes the domain separator it verified under
+/// as the third row of the base context column, so an expression can pin the
+/// domain its signed contexts MUST have been signed under.
 ///
 /// The domain separates this calling contract's signed contexts from other
 /// domains. It is not replay protection: the calling contract (likely with the
