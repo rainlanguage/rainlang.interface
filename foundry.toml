@@ -30,12 +30,12 @@ libs = ["dependencies"]
 runs = 2048
 
 [dependencies]
-forge-std = "1.16.2"
+forge-std = "1.17.0"
 "@openzeppelin-contracts" = "5.7.0"
 "rain-lib-hash" = "0.1.27"
 "rain-lib-typecast" = "0.1.4"
 "rain-math-binary" = "0.1.4"
-"rain-sol-codegen" = "0.1.37"
+"rain-sol-codegen" = "0.1.39"
 "rain-solmem" = "0.1.28"
 
 [soldeer]
