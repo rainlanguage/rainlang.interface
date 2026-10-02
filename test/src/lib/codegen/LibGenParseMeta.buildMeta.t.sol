@@ -15,6 +15,7 @@ import {
 } from "src/lib/codegen/LibGenParseMeta.sol";
 import {META_ITEM_SIZE} from "src/lib/parse/LibParseMeta.sol";
 import {LibBloom} from "test/lib/bloom/LibBloom.sol";
+import {LibParseMetaFingerprint} from "test/lib/meta/LibParseMetaFingerprint.sol";
 
 contract LibGenParseMetaBuildMetaTest is Test {
     /// META_ITEM_MASK must be a full META_ITEM_SIZE-byte mask (32 bits for
@@ -56,7 +57,12 @@ contract LibGenParseMetaBuildMetaTest is Test {
     }
 
     function testBuildMeta(AuthoringMetaV2[] memory authoringMeta) external pure {
-        vm.assume(!LibBloom.bloomFindsDupes(LibAuthoringMeta.copyWordsFromAuthoringMeta(authoringMeta)));
+        bytes32[] memory words = LibAuthoringMeta.copyWordsFromAuthoringMeta(authoringMeta);
+        vm.assume(!LibBloom.bloomFindsDupes(words));
+        // Two distinct words that share an expansion bit and a fingerprint cannot
+        // both be represented in the parse meta, so generation rejects the set. See
+        // `LibParseMetaFingerprint` for why that is correct rather than a defect.
+        vm.assume(!LibParseMetaFingerprint.findsDupes(words));
         bytes memory meta = LibGenParseMeta.buildParseMetaV2(authoringMeta, expanderDepth(authoringMeta.length));
         (meta);
     }
@@ -66,7 +72,12 @@ contract LibGenParseMetaBuildMetaTest is Test {
         pure
     {
         vm.assume(authoringMeta.length > 0);
-        vm.assume(!LibBloom.bloomFindsDupes(LibAuthoringMeta.copyWordsFromAuthoringMeta(authoringMeta)));
+        bytes32[] memory words = LibAuthoringMeta.copyWordsFromAuthoringMeta(authoringMeta);
+        vm.assume(!LibBloom.bloomFindsDupes(words));
+        // Two distinct words that share an expansion bit and a fingerprint cannot
+        // both be represented in the parse meta, so generation rejects the set. See
+        // `LibParseMetaFingerprint` for why that is correct rather than a defect.
+        vm.assume(!LibParseMetaFingerprint.findsDupes(words));
         for (uint256 i = 0; i < authoringMeta.length; i++) {
             vm.assume(authoringMeta[i].word != notFound);
         }
@@ -87,7 +98,12 @@ contract LibGenParseMetaBuildMetaTest is Test {
         pure
     {
         vm.assume(authoringMeta.length > 50);
-        vm.assume(!LibBloom.bloomFindsDupes(LibAuthoringMeta.copyWordsFromAuthoringMeta(authoringMeta)));
+        bytes32[] memory words = LibAuthoringMeta.copyWordsFromAuthoringMeta(authoringMeta);
+        vm.assume(!LibBloom.bloomFindsDupes(words));
+        // Two distinct words that share an expansion bit and a fingerprint cannot
+        // both be represented in the parse meta, so generation rejects the set. See
+        // `LibParseMetaFingerprint` for why that is correct rather than a defect.
+        vm.assume(!LibParseMetaFingerprint.findsDupes(words));
         for (uint256 i = 0; i < authoringMeta.length; i++) {
             vm.assume(authoringMeta[i].word != notFound);
         }
@@ -262,7 +278,12 @@ contract LibGenParseMetaBuildMetaTest is Test {
     /// Fuzz: parseMetaConstantString should not revert for any valid
     /// (no duplicate words) authoring meta.
     function testParseMetaConstantStringFuzz(AuthoringMetaV2[] memory authoringMeta) external pure {
-        vm.assume(!LibBloom.bloomFindsDupes(LibAuthoringMeta.copyWordsFromAuthoringMeta(authoringMeta)));
+        bytes32[] memory words = LibAuthoringMeta.copyWordsFromAuthoringMeta(authoringMeta);
+        vm.assume(!LibBloom.bloomFindsDupes(words));
+        // Two distinct words that share an expansion bit and a fingerprint cannot
+        // both be represented in the parse meta, so generation rejects the set. See
+        // `LibParseMetaFingerprint` for why that is correct rather than a defect.
+        vm.assume(!LibParseMetaFingerprint.findsDupes(words));
         bytes memory encoded = abi.encode(authoringMeta);
         string memory result = LibGenParseMeta.parseMetaConstantString(vm, encoded, expanderDepth(authoringMeta.length));
         assertTrue(bytes(result).length > 0);
