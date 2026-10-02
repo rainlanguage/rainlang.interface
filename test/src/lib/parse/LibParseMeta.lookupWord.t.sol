@@ -7,6 +7,7 @@ import {LibParseMeta} from "src/lib/parse/LibParseMeta.sol";
 import {LibGenParseMeta} from "src/lib/codegen/LibGenParseMeta.sol";
 import {LibAuthoringMeta, AuthoringMetaV2} from "test/lib/meta/LibAuthoringMeta.sol";
 import {LibBloom} from "test/lib/bloom/LibBloom.sol";
+import {LibParseMetaFingerprint} from "test/lib/meta/LibParseMetaFingerprint.sol";
 import {
     META_ITEM_SIZE,
     FINGERPRINT_MASK,
@@ -40,7 +41,12 @@ contract LibParseMetaLookupWordTest is Test {
     function testCheckParseMetaStructureFuzz(AuthoringMetaV2[] memory authoringMeta) external pure {
         vm.assume(authoringMeta.length > 0);
         vm.assume(authoringMeta.length <= 64);
-        vm.assume(!LibBloom.bloomFindsDupes(LibAuthoringMeta.copyWordsFromAuthoringMeta(authoringMeta)));
+        bytes32[] memory words = LibAuthoringMeta.copyWordsFromAuthoringMeta(authoringMeta);
+        vm.assume(!LibBloom.bloomFindsDupes(words));
+        // Two distinct words that share an expansion bit and a fingerprint cannot
+        // both be represented in the parse meta, so generation rejects the set. See
+        // `LibParseMetaFingerprint` for why that is correct rather than a defect.
+        vm.assume(!LibParseMetaFingerprint.findsDupes(words));
         uint8 depth = uint8(authoringMeta.length / type(uint8).max + 3);
         bytes memory meta = LibGenParseMeta.buildParseMetaV2(authoringMeta, depth);
         LibParseMeta.checkParseMetaStructure(meta);
@@ -265,7 +271,12 @@ contract LibParseMetaLookupWordTest is Test {
     function testLookupWordRoundtripFuzz(AuthoringMetaV2[] memory authoringMeta, bytes32 notFound) external pure {
         vm.assume(authoringMeta.length > 0);
         vm.assume(authoringMeta.length <= 64);
-        vm.assume(!LibBloom.bloomFindsDupes(LibAuthoringMeta.copyWordsFromAuthoringMeta(authoringMeta)));
+        bytes32[] memory words = LibAuthoringMeta.copyWordsFromAuthoringMeta(authoringMeta);
+        vm.assume(!LibBloom.bloomFindsDupes(words));
+        // Two distinct words that share an expansion bit and a fingerprint cannot
+        // both be represented in the parse meta, so generation rejects the set. See
+        // `LibParseMetaFingerprint` for why that is correct rather than a defect.
+        vm.assume(!LibParseMetaFingerprint.findsDupes(words));
         for (uint256 i = 0; i < authoringMeta.length; i++) {
             vm.assume(authoringMeta[i].word != notFound);
         }
