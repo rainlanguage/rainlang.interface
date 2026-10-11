@@ -20,6 +20,36 @@ contract LibBytecodeCheckNoOOBPointersTest is BytecodeTest {
         LibBytecode.checkNoOOBPointers(bytecode);
     }
 
+    /// A single source cannot hold more than 0xFF ops, as the ops count is one
+    /// header byte, so conforming a long bytecode to one source truncates it
+    /// to a full source that passes.
+    function testCheckNoOOBPointersConformingOpsCountMax() external pure {
+        bytes memory bytecode = new bytes(3648);
+        conformBytecode(bytecode, 1, bytes32(uint256(0x554)));
+        LibBytecode.checkNoOOBPointers(bytecode);
+        assertEq(LibBytecode.sourceCount(bytecode), uint256(1));
+        assertEq(LibBytecode.sourceOpsCount(bytecode, 0), uint256(0xFF));
+        assertEq(bytecode.length, uint256(1 + 2 + 4 + 0xFF * 4));
+    }
+
+    /// Every source offset is two bytes, so conforming a bytecode longer than
+    /// those offsets can address truncates it to one that passes.
+    function testCheckNoOOBPointersConformingOffsetMax() external pure {
+        bytes memory bytecode = new bytes(0x20000);
+        conformBytecode(bytecode, 0xFF, bytes32(0));
+        LibBytecode.checkNoOOBPointers(bytecode);
+        uint256 sourceCount = LibBytecode.sourceCount(bytecode);
+        uint256 opsCount = 0;
+        for (uint256 i = 0; i < sourceCount; i++) {
+            opsCount += LibBytecode.sourceOpsCount(bytecode, i);
+        }
+        // The source count leaves room for more ops than the offsets can
+        // address, so the offsets are what truncate.
+        assertTrue(sourceCount * 0xFF > (0xFFFF - sourceCount * 4) / 4);
+        assertEq(opsCount, (0xFFFF - sourceCount * 4) / 4);
+        assertEq(bytecode.length, 1 + sourceCount * 2 + sourceCount * 4 + opsCount * 4);
+    }
+
     /// Expose the library function externally so we can expect reverts against
     /// it.
     //forge-lint: disable-next-line(mixed-case-function)
