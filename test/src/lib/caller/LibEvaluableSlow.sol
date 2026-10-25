@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {EvaluableV2} from "src/interface/deprecated/v1/IInterpreterCallerV2.sol";
-import {EvaluableV4} from "src/interface/IInterpreterCallerV4.sol";
+import {EvaluableV4} from "src/interface/IInterpreterCallerV5.sol";
 
 library LibEvaluableSlow {
     function hashSlow(EvaluableV2 memory evaluable) internal pure returns (bytes32) {

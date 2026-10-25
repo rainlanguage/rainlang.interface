@@ -2,101 +2,40 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {LibHashNoAlloc, HASH_NIL} from "rain-lib-hash-0.1.27/src/lib/LibHashNoAlloc.sol";
-
 import {SignatureChecker} from "@openzeppelin-contracts-5.7.0/utils/cryptography/SignatureChecker.sol";
 import {MessageHashUtils} from "@openzeppelin-contracts-5.7.0/utils/cryptography/MessageHashUtils.sol";
 
-import {
-    SignedContextV1,
-    SIGNED_CONTEXT_SIGNER_OFFSET,
-    SIGNED_CONTEXT_SIGNATURE_OFFSET,
-    SIGNED_CONTEXT_CONTEXT_OFFSET,
-    SignedContextV2,
-    SIGNED_CONTEXT_V2_TYPEHASH
-} from "../../interface/IInterpreterCallerV4.sol";
+import {SignedContextV2, SIGNED_CONTEXT_V2_TYPEHASH} from "../../interface/IInterpreterCallerV5.sol";
 
 /// Thrown when the ith signature from a list of signed contexts is invalid.
 /// @param i The index of the invalid signature in the list of signed contexts.
 error InvalidSignature(uint256 i);
 
-/// @dev CONTEXT_BASE_COLUMN and CONTEXT_BASE_ROWS are the dimensions of the base
-/// context provided by `LibContext.base()`. These constants are not required to
-/// use the base context but are provided for convenience when working with it.
+/// @dev Column of the base context in a context built by `LibContext.buildV2`.
 uint256 constant CONTEXT_BASE_COLUMN = 0;
-/// @dev CONTEXT_BASE_ROWS is the number of rows in the base context, which is
-/// always 2 for the `msg.sender` and address of the calling contract.
-uint256 constant CONTEXT_BASE_ROWS = 2;
-
-/// @dev The row index of the `msg.sender` in the base context.
-uint256 constant CONTEXT_BASE_ROW_SENDER = 0;
-/// @dev The row index of the address of the calling contract in the base
-/// context.
-uint256 constant CONTEXT_BASE_ROW_CALLING_CONTRACT = 1;
-
-/// @dev CONTEXT_BASE_V2_ROWS is the number of rows in the base context
-/// provided by `LibContext.baseV2()` and built by `LibContext.buildV2()`,
-/// which is always 3 for the `msg.sender`, the address of the calling
-/// contract and the EIP-712 domain separator the signed contexts were
-/// verified under. Rows 0 and 1 are as `LibContext.base()`.
+/// @dev Rows of the base context: `msg.sender`, calling contract, domain
+/// separator.
 uint256 constant CONTEXT_BASE_V2_ROWS = 3;
-/// @dev The row index of the EIP-712 domain separator in the base context
-/// built by `LibContext.buildV2()`.
+/// @dev Row of `msg.sender` in the base context.
+uint256 constant CONTEXT_BASE_ROW_SENDER = 0;
+/// @dev Row of the calling contract in the base context.
+uint256 constant CONTEXT_BASE_ROW_CALLING_CONTRACT = 1;
+/// @dev Row of the EIP-712 domain separator the signed contexts were verified
+/// under, so an expression can pin it.
 uint256 constant CONTEXT_BASE_ROW_DOMAIN_SEPARATOR = 2;
 
 /// @title LibContext
-/// @notice Conventions for working with context as a calling contract. All of
-/// this functionality is OPTIONAL but probably useful for the majority of use
-/// cases. By building and authenticating onchain, caller provided and signed
-/// contexts all in a standard way the overall usability of context is greatly
-/// improved for expression authors and readers. Any calling contract that can
-/// match the context expectations of an existing expression is one large step
-/// closer to compatibility and portability, inheriting network effects of what
-/// has already been authored elsewhere.
+/// @notice Standard construction and authentication of the context matrix
+/// for an `IInterpreterCallerV5`.
 library LibContext {
-    /// The base context is the `msg.sender` and address of the calling contract.
-    /// As the interpreter itself is called via an external interface and may be
-    /// statically calling itself, it MAY NOT have any ability to inspect either
-    /// of these values. Even if this were not the case the calling contract
-    /// cannot assume the existence of some opcode(s) in the interpreter that
-    /// inspect the caller, so providing these two values as context is
-    /// sufficient to decouple the calling contract from the interpreter. It is
-    /// STRONGLY RECOMMENDED that even if the calling contract has "no context"
-    /// that it still provides this base to every `eval`.
-    ///
-    /// Calling contracts DO NOT need to call this directly. It is built and
-    /// merged automatically into the standard context built by `build`.
-    ///
-    /// @return baseArray The `msg.sender` and address of the calling contract using this
-    /// library, as a context-compatible array.
-    function base() internal view returns (bytes32[] memory baseArray) {
-        assembly ("memory-safe") {
-            baseArray := mload(0x40)
-            mstore(baseArray, 2)
-            mstore(add(baseArray, 0x20), caller())
-            mstore(add(baseArray, 0x40), address())
-            mstore(0x40, add(baseArray, 0x60))
-        }
-    }
-
-    /// The base context of `buildV2`: `LibContext.base()` with the EIP-712
-    /// domain separator of the calling contract appended as a third row. The
-    /// domain separator is exposed so that an expression can pin the domain
-    /// its signed contexts MUST have been signed under, e.g. by comparing
-    /// `context<0 2>()` to a literal. Every signed context `buildV2` merges
-    /// into the same matrix was verified under exactly this domain separator,
-    /// so an expression that checks it knows which deployment's domain every
-    /// signer in the signers column vouched under.
-    ///
-    /// Calling contracts DO NOT need to call this directly. It is built and
-    /// merged automatically into the standard context built by `buildV2`.
-    ///
+    /// `[msg.sender, address(this), domainSeparator]` as a context column.
+    /// The interpreter cannot inspect its caller, so these are provided as
+    /// context.
     /// @param domainSeparator The EIP-712 domain separator of the calling
-    /// contract, as passed to `buildV2`.
-    /// @return baseArray The `msg.sender`, address of the calling contract
-    /// using this library and `domainSeparator`, as a context-compatible
-    /// array.
-    function baseV2(bytes32 domainSeparator) internal view returns (bytes32[] memory baseArray) {
+    /// contract.
+    /// @return The base context column.
+    function baseV2(bytes32 domainSeparator) internal view returns (bytes32[] memory) {
+        bytes32[] memory baseArray;
         assembly ("memory-safe") {
             baseArray := mload(0x40)
             mstore(baseArray, 3)
@@ -105,176 +44,18 @@ library LibContext {
             mstore(add(baseArray, 0x60), domainSeparator)
             mstore(0x40, add(baseArray, 0x80))
         }
+        return baseArray;
     }
 
-    /// Standard hashing process over a single `SignedContextV1`. Notably used
-    /// to hash a list as `SignedContextV1[]` but could also be used to hash a
-    /// single `SignedContextV1` in isolation. Avoids allocating memory by
-    /// hashing each struct field in sequence within the memory scratch space.
+    /// EIP-712 `hashStruct` of a `SignedContextV2`. Uses memory past the free
+    /// memory pointer without allocating.
     /// @param signedContext The signed context to hash.
-    /// @return hashed The hashed signed context.
-    function hash(SignedContextV1 memory signedContext) internal pure returns (bytes32 hashed) {
-        uint256 signerOffset = SIGNED_CONTEXT_SIGNER_OFFSET;
-        uint256 contextOffset = SIGNED_CONTEXT_CONTEXT_OFFSET;
-        uint256 signatureOffset = SIGNED_CONTEXT_SIGNATURE_OFFSET;
-
-        assembly ("memory-safe") {
-            mstore(0, keccak256(add(signedContext, signerOffset), 0x20))
-
-            let context_ := mload(add(signedContext, contextOffset))
-            mstore(0x20, keccak256(add(context_, 0x20), mul(mload(context_), 0x20)))
-
-            mstore(0, keccak256(0, 0x40))
-
-            let signature_ := mload(add(signedContext, signatureOffset))
-            mstore(0x20, keccak256(add(signature_, 0x20), mload(signature_)))
-
-            hashed := keccak256(0, 0x40)
-        }
-    }
-
-    /// Standard hashing process over a list of signed contexts. Situationally
-    /// useful if the calling contract wants to record that it has seen a set of
-    /// signed data then later compare it against some input (e.g. to ensure that
-    /// many calls of some function all share the same input values). Note that
-    /// unlike the internals of `build`, this hashes over the signer and the
-    /// signature, to ensure that some data cannot be re-signed and used under
-    /// a different provenance later.
-    /// @param signedContexts The list of signed contexts to hash over.
-    /// @return hashed The hash of the signed contexts.
-    function hash(SignedContextV1[] memory signedContexts) internal pure returns (bytes32 hashed) {
-        uint256 cursor;
-        uint256 end;
-        bytes32 hashNil = HASH_NIL;
-        assembly ("memory-safe") {
-            cursor := add(signedContexts, 0x20)
-            end := add(cursor, mul(mload(signedContexts), 0x20))
-            mstore(0, hashNil)
-        }
-
-        SignedContextV1 memory signedContext;
-        bytes32 mem0;
-        while (cursor < end) {
-            assembly ("memory-safe") {
-                signedContext := mload(cursor)
-                // Subhash will write to 0 for its own hashing so keep a copy
-                // before it gets overwritten.
-                mem0 := mload(0)
-            }
-            bytes32 subHash = hash(signedContext);
-            assembly ("memory-safe") {
-                mstore(0, mem0)
-                mstore(0x20, subHash)
-                mstore(0, keccak256(0, 0x40))
-                cursor := add(cursor, 0x20)
-            }
-        }
-        assembly ("memory-safe") {
-            hashed := mload(0)
-        }
-    }
-
-    /// Builds a standard 2-dimensional context array from base, calling and
-    /// signed contexts. Note that "columns" of a context array refer to each
-    /// `uint256[]` and each item within a `uint256[]` is a "row".
-    ///
-    /// @param baseContext Anything the calling contract can provide which MAY
-    /// include input from the `msg.sender` of the calling contract. The default
-    /// base context from `LibContext.base()` DOES NOT need to be provided by the
-    /// caller, this matrix MAY be empty and will be simply merged into the final
-    /// context. The base context matrix MUST contain a consistent number of
-    /// columns from the calling contract so that the expression can always
-    /// predict how many unsigned columns there will be when it runs.
-    /// @param signedContexts Signed contexts are provided by the `msg.sender`
-    /// but signed by a third party. The expression (author) defines _who_ may
-    /// sign and the calling contract authenticates the signature over the
-    /// signed data. Technically `build` handles all the authentication inline
-    /// for the calling contract so if some context builds it can be treated as
-    /// authentic. The builder WILL REVERT if any of the signatures are invalid.
-    /// Note two things about the structure of the final built context re: signed
-    /// contexts:
-    /// - The first signed column is a list of the signers in order of what they signed
-    /// - The `msg.sender` can provide an arbitrary number of signed contexts so
-    ///   expressions DO NOT know exactly how many columns there are.
-    /// The expression is responsible for defining e.g. a domain separator in a
-    /// position that would force signed context to be provided in the "correct"
-    /// order, rather than relying on the `msg.sender` to honestly present data
-    /// in any particular structure/order.
-    /// @return The fully assembled context matrix. Column 0 is the base context
-    /// from `LibContext.base()`. Subsequent columns are from `baseContext`.
-    /// If signed contexts are provided, those are followed by a signers column
-    /// (each signer address cast to `bytes32`) and then each signed context's
-    /// data as individual columns.
-    function build(bytes32[][] memory baseContext, SignedContextV1[] memory signedContexts)
-        internal
-        view
-        returns (bytes32[][] memory)
-    {
-        unchecked {
-            bytes32[] memory signers = new bytes32[](signedContexts.length);
-
-            // - LibContext.base() + whatever we are provided.
-            // - signed contexts + signers if they exist else nothing.
-            uint256 contextLength = 1 + baseContext.length + (signedContexts.length > 0 ? signedContexts.length + 1 : 0);
-
-            bytes32[][] memory context = new bytes32[][](contextLength);
-            uint256 offset = 0;
-            context[offset] = LibContext.base();
-
-            for (uint256 i = 0; i < baseContext.length; i++) {
-                offset++;
-                context[offset] = baseContext[i];
-            }
-
-            if (signedContexts.length > 0) {
-                offset++;
-                context[offset] = signers;
-
-                for (uint256 i = 0; i < signedContexts.length; i++) {
-                    if (
-                        // Unlike `LibContext.hash` we can only hash over
-                        // the context as it's impossible for a signature
-                        // to sign itself.
-                        // Note the use of encodePacked here over a
-                        // single array, not including the length. This
-                        // would be a security issue if multiple dynamic
-                        // length values were hashed over together as
-                        // then many possible inputs could collide with
-                        // a single encoded output.
-                        !SignatureChecker.isValidSignatureNow(
-                            signedContexts[i].signer,
-                            MessageHashUtils.toEthSignedMessageHash(
-                                LibHashNoAlloc.hashWords(signedContexts[i].context)
-                            ),
-                            signedContexts[i].signature
-                        )
-                    ) {
-                        revert InvalidSignature(i);
-                    }
-
-                    signers[i] = bytes32(uint256(uint160(signedContexts[i].signer)));
-                    offset++;
-                    context[offset] = signedContexts[i].context;
-                }
-            }
-
-            return context;
-        }
-    }
-
-    /// EIP-712 `hashStruct` of a `SignedContextV2`:
-    /// `keccak256(abi.encodePacked(SIGNED_CONTEXT_V2_TYPEHASH, signer, keccak256(abi.encodePacked(context))))`.
-    /// The context is hashed as its packed 32-byte words with no length
-    /// prefix, which is the EIP-712 encoding of a `bytes32[]` member. The
-    /// `signature` field is not part of the hash. The three words are written
-    /// to the memory past the free memory pointer, which is not moved, so
-    /// nothing is allocated.
-    /// @param signedContext The signed context to hash.
-    /// @return hashed The EIP-712 struct hash of `signedContext`.
-    function hashStruct(SignedContextV2 memory signedContext) internal pure returns (bytes32 hashed) {
+    /// @return The EIP-712 struct hash of `signedContext`.
+    function hashStruct(SignedContextV2 memory signedContext) internal pure returns (bytes32) {
         bytes32 typeHash = SIGNED_CONTEXT_V2_TYPEHASH;
         address signer = signedContext.signer;
         bytes32[] memory context = signedContext.context;
+        bytes32 hashed;
         assembly ("memory-safe") {
             let contextHash := keccak256(add(context, 0x20), mul(mload(context), 0x20))
             let ptr := mload(0x40)
@@ -283,52 +64,24 @@ library LibContext {
             mstore(add(ptr, 0x40), contextHash)
             hashed := keccak256(ptr, 0x60)
         }
+        return hashed;
     }
 
-    /// Builds a standard 2-dimensional context array from base, calling and
-    /// signed contexts, as `build` does, with each `SignedContextV2` verified
-    /// as EIP-712 typed data under `domainSeparator`. The returned matrix has
-    /// the same column layout as `build`: column 0 is the base context, then
-    /// the `baseContext` columns, then (only if there are signed contexts) a
-    /// column of the signers in order and one column per signed context.
+    /// Builds the context matrix: `baseV2(domainSeparator)`, then
+    /// `baseContext`, then, only if there are signed contexts, a column of
+    /// their signers followed by one column per signed context.
     ///
-    /// The one difference from `build` is column 0: it is
-    /// `LibContext.baseV2(domainSeparator)`, which is `LibContext.base()` with
-    /// `domainSeparator` as a third row (`CONTEXT_BASE_ROW_DOMAIN_SEPARATOR`).
-    /// This is the domain every signed context in the matrix was verified
-    /// under, exposed so the expression can pin it: an expression that
-    /// requires `context<0 2>()` to equal its deployment's domain separator
-    /// does not accept a context built by a calling contract with a different
-    /// domain, even one the same signers signed for. The row is present
-    /// whether or not there are any signed contexts, so its coordinate is
-    /// fixed.
-    ///
-    /// @param baseContext Anything the calling contract can provide which MAY
-    /// include input from the `msg.sender` of the calling contract. The default
-    /// base context from `LibContext.baseV2()` DOES NOT need to be provided by
-    /// the caller, this matrix MAY be empty and will be simply merged into the
-    /// final context. The base context matrix MUST contain a consistent number
-    /// of columns from the calling contract so that the expression can always
-    /// predict how many unsigned columns there will be when it runs.
-    /// @param signedContexts Signed contexts are provided by the `msg.sender`
-    /// but signed by a third party. Each signature is verified for its
-    /// `signer` against
-    /// `MessageHashUtils.toTypedDataHash(domainSeparator, hashStruct(signedContext))`
-    /// through `SignatureChecker`, so EOA and ERC-1271 signers are both
-    /// supported. REVERTS with `InvalidSignature(i)` at the first `i` that
-    /// does not verify. The expression (author) defines _who_ may sign, and
-    /// the binding of the signed words to a particular use (nonces, expiries,
-    /// what the words are for) is expressed in the context words and checked
-    /// by the expression, as with `build`. The `msg.sender` can provide an
-    /// arbitrary number of signed contexts so expressions DO NOT know exactly
-    /// how many columns there are.
+    /// Each signed context is verified through `SignatureChecker` (EOA and
+    /// ERC-1271) against
+    /// `MessageHashUtils.toTypedDataHash(domainSeparator, hashStruct(signedContext))`.
+    /// @param baseContext Calling contract columns. MUST have a consistent
+    /// number of columns so the expression can locate the signed columns.
+    /// @param signedContexts Contexts signed by third parties, provided by
+    /// `msg.sender`.
     /// @param domainSeparator The EIP-712 domain separator of the calling
-    /// contract. This library computes no domain and fixes no domain fields.
-    /// The same signed data under a different domain separator does not
-    /// verify. Exposed to the expression as row
-    /// `CONTEXT_BASE_ROW_DOMAIN_SEPARATOR` of column `CONTEXT_BASE_COLUMN`.
-    /// @return The fully assembled context matrix, laid out as `build` with
-    /// the domain separator as the third row of column 0.
+    /// contract.
+    /// @return The context matrix. REVERTS with `InvalidSignature(i)` at the
+    /// first signed context `i` that does not verify.
     function buildV2(bytes32[][] memory baseContext, SignedContextV2[] memory signedContexts, bytes32 domainSeparator)
         internal
         view
@@ -337,8 +90,6 @@ library LibContext {
         unchecked {
             bytes32[] memory signers = new bytes32[](signedContexts.length);
 
-            // - LibContext.baseV2() + whatever we are provided.
-            // - signed contexts + signers if they exist else nothing.
             uint256 contextLength = 1 + baseContext.length + (signedContexts.length > 0 ? signedContexts.length + 1 : 0);
 
             bytes32[][] memory context = new bytes32[][](contextLength);

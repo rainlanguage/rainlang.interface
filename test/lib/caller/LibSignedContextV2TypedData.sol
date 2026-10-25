@@ -2,8 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Vm} from "forge-std-1.16.2/src/Vm.sol";
-import {SignedContextV2, SIGNED_CONTEXT_V2_TYPE} from "src/interface/IInterpreterCallerV4.sol";
+import {Vm} from "forge-std-1.17.0/src/Vm.sol";
+import {SignedContextV2, SIGNED_CONTEXT_V2_TYPE} from "src/interface/IInterpreterCallerV5.sol";
 
 /// The EIP-712 message of a `SignedContextV2`: its typed members, without the
 /// signature. ABI-encoded, this is what the struct hash cheatcode decodes.
@@ -45,12 +45,12 @@ library LibSignedContextV2TypedData {
     }
 
     /// JSON array of the context words as 32-byte hex strings.
-    function contextJson(bytes32[] memory context) internal pure returns (string memory words) {
-        words = "[";
+    function contextJson(bytes32[] memory context) internal pure returns (string memory) {
+        string memory words = "[";
         for (uint256 i = 0; i < context.length; i++) {
             words = string.concat(words, i == 0 ? "" : ",", "\"", vm.toString(context[i]), "\"");
         }
-        words = string.concat(words, "]");
+        return string.concat(words, "]");
     }
 
     /// EIP-712 JSON (`types`, `primaryType`, `domain`, `message`) for `signer`

@@ -2,8 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {IERC1271} from "@openzeppelin-contracts-5.6.1/interfaces/IERC1271.sol";
-import {ECDSA} from "@openzeppelin-contracts-5.6.1/utils/cryptography/ECDSA.sol";
+import {IERC1271} from "@openzeppelin-contracts-5.7.0/interfaces/IERC1271.sol";
+import {ECDSA} from "@openzeppelin-contracts-5.7.0/utils/cryptography/ECDSA.sol";
 
 /// A contract account that validates ERC-1271 signatures against one EOA
 /// owner key, as a smart wallet with a single signer does. Two wallets with

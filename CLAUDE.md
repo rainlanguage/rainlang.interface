@@ -41,24 +41,23 @@ The current interface set (all in `src/interface/`):
   results and state writes without persisting anything itself.
 - **IInterpreterStoreV3** — Key-value state storage with namespace isolation per
   caller. `set()` for bulk writes, `get()` for reads.
-- **IInterpreterCallerV4** — Defines `EvaluableV4` struct (interpreter + store +
-  bytecode). Contracts that call the interpreter implement this.
+- **IInterpreterCallerV5** — `SignedContextV2` (EIP-712) and re-exports
+  `EvaluableV4`. Contracts that call the interpreter implement this.
 - **IParserV2** — Converts Rainlang source text to bytecode (`parse2()`).
 - **ISubParserV4** — Extension point for custom literals and words in parsers.
 - **IInterpreterExternV4** — External function dispatch with integrity checking.
 - **IParserPragmaV1** — Pragma support (e.g. `usingWordsFrom`).
 
-Deprecated v1/v2 interfaces live in `src/interface/deprecated/`. Deprecated
-interfaces should not be modified unless undeprecating (moving back to
-`src/interface/`).
+Deprecated interfaces live in `src/interface/deprecated/`. Deprecated interfaces
+should not be modified unless undeprecating (moving back to `src/interface/`).
 
 ### Libraries (`src/lib/`)
 
 - **LibBytecode** (`bytecode/`) — Parse and validate Rainlang bytecode structure
   (source counts, offsets, stack allocation, OOB checks).
-- **LibContext** (`caller/`) — Build execution context arrays with signature
-  verification (uses OZ SignatureChecker). Base context =
-  `[msg.sender, calling_contract]`.
+- **LibContext** (`caller/`) — `buildV2` builds the context matrix, verifying
+  `SignedContextV2` as EIP-712 under the caller's domain separator. Base context
+  = `[msg.sender, calling_contract, domain_separator]`.
 - **LibEvaluable** (`caller/`) — Hash utility for `EvaluableV4` structs.
 - **LibNamespace** (`ns/`) — Qualifies state namespaces by hashing with sender
   address for caller isolation.

@@ -7,7 +7,7 @@ pragma solidity ^0.8.25;
 //forge-lint: disable-next-line(unused-import)
 import {IInterpreterStoreV3} from "../../interface/IInterpreterStoreV3.sol";
 
-import {EvaluableV4} from "../../interface/IInterpreterCallerV4.sol";
+import {EvaluableV4} from "../../interface/IInterpreterCallerV5.sol";
 
 // Number of fixed-size fields (interpreter, store) in `EvaluableV4` before
 // the dynamic `bytecode` pointer. 2 fields * 0x20 bytes each = 0x40.
