@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test} from "forge-std-1.16.2/src/Test.sol";
+import {Test} from "forge-std-1.17.0/src/Test.sol";
 
 abstract contract BytecodeTest is Test {
     function conformBytecode(bytes memory bytecode, uint256 sourceCount, bytes32 seed) internal pure {
@@ -50,10 +50,36 @@ abstract contract BytecodeTest is Test {
                 // Randomly allocate ops to sources.
                 uint256 sourceHeadersSize = sourceCount * 4;
                 uint256 totalOpsCount = (bytecode.length - sourcesRelativeStart - sourceHeadersSize) / 4;
+
+                // A source's ops count is a single header byte and its offset
+                // pointer is two bytes, so a conforming bytecode holds at most
+                // 0xFF ops per source and every source starts within 0xFFFF
+                // bytes of the relative start. Truncate the bytecode to the
+                // ops that fit both.
+                {
+                    uint256 maxOpsCount = sourceCount * 0xFF;
+                    uint256 maxOpsCountByOffset = (0xFFFF - sourceHeadersSize) / 4;
+                    if (maxOpsCountByOffset < maxOpsCount) {
+                        maxOpsCount = maxOpsCountByOffset;
+                    }
+                    if (totalOpsCount > maxOpsCount) {
+                        uint256 excessLength = (totalOpsCount - maxOpsCount) * 4;
+                        assembly ("memory-safe") {
+                            mstore(bytecode, sub(mload(bytecode), excessLength))
+                        }
+                        totalOpsCount = maxOpsCount;
+                    }
+                }
+
+                // Randomly allocate ops to sources. A source that already holds
+                // 0xFF ops passes its op to the next source with room.
                 uint256[] memory opsPerSource = new uint256[](sourceCount);
                 seed = keccak256(abi.encodePacked(seed));
                 for (uint256 i = 0; i < totalOpsCount; i++) {
                     uint256 sourceIndex = uint256(seed) % sourceCount;
+                    while (opsPerSource[sourceIndex] == 0xFF) {
+                        sourceIndex = (sourceIndex + 1) % sourceCount;
+                    }
                     opsPerSource[sourceIndex]++;
                     seed = keccak256(abi.encodePacked(seed));
                 }
