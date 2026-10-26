@@ -1,7 +1,3 @@
-[package]
-name = "rainlang-interface"
-version = "0.2.4"
-
 [profile.default]
 
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config
