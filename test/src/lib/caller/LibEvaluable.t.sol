@@ -7,7 +7,7 @@ import {LibEvaluable} from "src/lib/caller/LibEvaluable.sol";
 import {LibEvaluableSlow} from "./LibEvaluableSlow.sol";
 import {IInterpreterStoreV3} from "src/interface/IInterpreterStoreV3.sol";
 
-import {EvaluableV4} from "src/interface/IInterpreterCallerV4.sol";
+import {EvaluableV4} from "src/interface/IInterpreterCallerV5.sol";
 import {IInterpreterV4} from "src/interface/IInterpreterV4.sol";
 
 contract LibEvaluableTest is Test {
