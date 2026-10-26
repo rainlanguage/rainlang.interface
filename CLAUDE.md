@@ -56,8 +56,9 @@ should not be modified unless undeprecating (moving back to `src/interface/`).
 - **LibBytecode** (`bytecode/`) — Parse and validate Rainlang bytecode structure
   (source counts, offsets, stack allocation, OOB checks).
 - **LibContext** (`caller/`) — `buildV2` builds the context matrix, verifying
-  `SignedContextV2` as EIP-712 under the caller's domain separator. Base context
-  = `[msg.sender, calling_contract, domain_separator]`.
+  each `SignedContextV2` as EIP-712 under its signer-chosen domain separator.
+  Base context = `[msg.sender, calling_contract]`; signed contexts add signers
+  and domain separators columns.
 - **LibEvaluable** (`caller/`) — Hash utility for `EvaluableV4` structs.
 - **LibNamespace** (`ns/`) — Qualifies state namespaces by hashing with sender
   address for caller isolation.

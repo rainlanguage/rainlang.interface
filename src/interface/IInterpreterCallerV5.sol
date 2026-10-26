@@ -16,19 +16,25 @@ string constant SIGNED_CONTEXT_V2_TYPE = "SignedContextV2(address signer,bytes32
 /// @dev Literal so the hash is computed at compile time.
 bytes32 constant SIGNED_CONTEXT_V2_TYPEHASH = keccak256("SignedContextV2(address signer,bytes32[] context)");
 
-/// Context data signed by `signer` as EIP-712 typed data under the calling
-/// contract's domain separator. `signer` is signed over, so a signature
-/// verifies for exactly one account, ERC-1271 accounts included. ERC-1271
-/// signatures are checked onchain and can be revoked at any time.
+/// Context data signed by `signer` as EIP-712 typed data under
+/// `domainSeparator`. Signed context is published for any calling contract to
+/// consume, so the signer chooses the domain, not the caller. `signer` is
+/// signed over, so a signature verifies for exactly one account, ERC-1271
+/// accounts included. ERC-1271 signatures are checked onchain and can be
+/// revoked at any time.
 ///
 /// The domain is not replay protection. The expression is responsible for
-/// authorising signers and for binding the words to their use (purpose,
-/// nonces, uniqueness, expiry).
+/// pinning each signer's domain from the domain separators column, authorising
+/// signers and binding the words to their use (purpose, nonces, uniqueness,
+/// expiry).
 /// @param signer The account that produced the signature.
+/// @param domainSeparator The EIP-712 domain separator the signature is
+/// under. Not a member of the EIP-712 type.
 /// @param context Words merged as-is as one column of the context matrix.
 /// @param signature EIP-712 signature over `signer` and `context`.
 struct SignedContextV2 {
     address signer;
+    bytes32 domainSeparator;
     bytes32[] context;
     bytes signature;
 }

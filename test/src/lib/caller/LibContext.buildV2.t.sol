@@ -10,10 +10,9 @@ import {
     MessageHashUtils,
     InvalidSignature,
     CONTEXT_BASE_COLUMN,
-    CONTEXT_BASE_V2_ROWS,
+    CONTEXT_BASE_ROWS,
     CONTEXT_BASE_ROW_SENDER,
-    CONTEXT_BASE_ROW_CALLING_CONTRACT,
-    CONTEXT_BASE_ROW_DOMAIN_SEPARATOR
+    CONTEXT_BASE_ROW_CALLING_CONTRACT
 } from "src/lib/caller/LibContext.sol";
 import {SignedContextV2} from "src/interface/IInterpreterCallerV5.sol";
 import {LibSignedContextV2TypedData, EIP712Domain} from "test/lib/caller/LibSignedContextV2TypedData.sol";
@@ -26,16 +25,20 @@ contract LibContextBuildV2Test is Test {
     /// Keeps the EIP-712 JSON the oracle digests come from small.
     uint256 constant MAX_WORDS = 16;
 
-    function buildV2External(
-        bytes32[][] memory baseContext,
-        SignedContextV2[] memory signedContexts,
-        bytes32 domainSeparator
-    ) external view returns (bytes32[][] memory) {
-        return LibContext.buildV2(baseContext, signedContexts, domainSeparator);
+    function buildV2External(bytes32[][] memory baseContext, SignedContextV2[] memory signedContexts)
+        external
+        view
+        returns (bytes32[][] memory)
+    {
+        return LibContext.buildV2(baseContext, signedContexts);
     }
 
     function domain() internal pure returns (EIP712Domain memory) {
         return EIP712Domain("LibContextBuildV2Test", "1", 1, 0x1234567890123456789012345678901234567890);
+    }
+
+    function otherDomain() internal pure returns (EIP712Domain memory) {
+        return EIP712Domain("LibContextBuildV2TestOther", "2", 137, 0xabCDEF1234567890ABcDEF1234567890aBCDeF12);
     }
 
     function signingDomainSeparator() internal pure returns (bytes32) {
@@ -51,8 +54,8 @@ contract LibContextBuildV2Test is Test {
         return words;
     }
 
-    /// One signed context from `pk` presenting `context` under a signature
-    /// over `signedWords` in `signingDomain`.
+    /// One signed context from `pk` presenting `context` under
+    /// `signingDomain` with a signature over `signedWords`.
     function signedContextsFor(
         uint256 pk,
         EIP712Domain memory signingDomain,
@@ -62,6 +65,7 @@ contract LibContextBuildV2Test is Test {
         SignedContextV2[] memory signedContexts = new SignedContextV2[](1);
         signedContexts[0] = SignedContextV2({
             signer: vm.addr(pk),
+            domainSeparator: LibSignedContextV2TypedData.domainSeparator(signingDomain),
             context: context,
             signature: LibSignedContextV2TypedData.sign(pk, signingDomain, signedWords)
         });
@@ -85,6 +89,10 @@ contract LibContextBuildV2Test is Test {
         return words;
     }
 
+    function addressWord(address a) internal pure returns (bytes32) {
+        return bytes32(uint256(uint160(a)));
+    }
+
     function assertEqContext(bytes32[][] memory expected, bytes32[][] memory actual) internal pure {
         assertEq(expected.length, actual.length, "column count");
         for (uint256 i = 0; i < expected.length; i++) {
@@ -97,12 +105,13 @@ contract LibContextBuildV2Test is Test {
         words = bounded(words);
         SignedContextV2[] memory signedContexts = signedContextsFor(SIGNER_PK, words);
 
-        bytes32[][] memory actual = LibContext.buildV2(base, signedContexts, signingDomainSeparator());
-        assertEqContext(LibContextSlow.buildStructureSlow(base, signedContexts, signingDomainSeparator()), actual);
+        bytes32[][] memory actual = LibContext.buildV2(base, signedContexts);
+        assertEqContext(LibContextSlow.buildStructureSlow(base, signedContexts), actual);
 
-        assertEq(actual.length, 1 + base.length + 2);
-        assertEq(actual[1 + base.length], words1(bytes32(uint256(uint160(vm.addr(SIGNER_PK))))));
-        assertEq(actual[2 + base.length], words);
+        assertEq(actual.length, 1 + base.length + 3);
+        assertEq(actual[1 + base.length], words1(addressWord(vm.addr(SIGNER_PK))));
+        assertEq(actual[2 + base.length], words1(signingDomainSeparator()));
+        assertEq(actual[3 + base.length], words);
     }
 
     function testBuildV2SeveralSignedContextsBuild(bytes32 x, bytes32 y, bytes32 z) external view {
@@ -110,51 +119,96 @@ contract LibContextBuildV2Test is Test {
         signedContexts[0] = signedContextsFor(SIGNER_PK, words2(x, y))[0];
         signedContexts[1] = signedContextsFor(OTHER_PK, words1(z))[0];
 
-        bytes32[][] memory actual = LibContext.buildV2(new bytes32[][](0), signedContexts, signingDomainSeparator());
-        assertEqContext(
-            LibContextSlow.buildStructureSlow(new bytes32[][](0), signedContexts, signingDomainSeparator()), actual
-        );
+        bytes32[][] memory actual = LibContext.buildV2(new bytes32[][](0), signedContexts);
+        assertEqContext(LibContextSlow.buildStructureSlow(new bytes32[][](0), signedContexts), actual);
 
-        assertEq(actual.length, 4);
-        assertEq(
-            actual[1],
-            words2(bytes32(uint256(uint160(vm.addr(SIGNER_PK)))), bytes32(uint256(uint160(vm.addr(OTHER_PK)))))
-        );
-        assertEq(actual[2], words2(x, y));
-        assertEq(actual[3], words1(z));
+        assertEq(actual.length, 5);
+        assertEq(actual[1], words2(addressWord(vm.addr(SIGNER_PK)), addressWord(vm.addr(OTHER_PK))));
+        assertEq(actual[2], words2(signingDomainSeparator(), signingDomainSeparator()));
+        assertEq(actual[3], words2(x, y));
+        assertEq(actual[4], words1(z));
     }
 
-    /// With no signed contexts there is no signers column, and the base
-    /// column still carries the domain separator.
+    /// Each signed context verifies under its own signer's domain, and the
+    /// domain separators column holds each one at its signer's row.
     /// forge-config: default.fuzz.runs = 100
-    function testBuildV2ZeroSignedContexts(bytes32[][] memory base, bytes32 anyDomainSeparator) external view {
+    function testBuildV2DifferentDomainsBuild(bytes32[][] memory base, bytes32 x, bytes32 y, bytes32 z)
+        external
+        view
+    {
+        bytes32 domainSeparatorA = signingDomainSeparator();
+        bytes32 domainSeparatorB = LibSignedContextV2TypedData.domainSeparator(otherDomain());
+        assertNotEq(domainSeparatorA, domainSeparatorB);
+
+        SignedContextV2[] memory signedContexts = new SignedContextV2[](2);
+        signedContexts[0] = signedContextsFor(SIGNER_PK, domain(), words2(x, y), words2(x, y))[0];
+        signedContexts[1] = signedContextsFor(OTHER_PK, otherDomain(), words1(z), words1(z))[0];
+
+        bytes32[][] memory actual = LibContext.buildV2(base, signedContexts);
+        assertEqContext(LibContextSlow.buildStructureSlow(base, signedContexts), actual);
+        assertEq(actual.length, 1 + base.length + 4);
+        assertEq(actual[CONTEXT_BASE_COLUMN].length, CONTEXT_BASE_ROWS);
+        for (uint256 i = 0; i < base.length; i++) {
+            assertEq(actual[1 + i], base[i]);
+        }
+        assertEq(actual[1 + base.length], words2(addressWord(vm.addr(SIGNER_PK)), addressWord(vm.addr(OTHER_PK))));
+        assertEq(actual[2 + base.length], words2(domainSeparatorA, domainSeparatorB));
+        assertEq(actual[3 + base.length], words2(x, y));
+        assertEq(actual[4 + base.length], words1(z));
+    }
+
+    /// The domain separators column is aligned with the signers column: row
+    /// `i` of both is signed context `i`.
+    /// forge-config: default.fuzz.runs = 50
+    function testBuildV2DomainSeparatorsAlignedWithSigners(uint256 n, uint64 chainIdSeed) external view {
+        n = bound(n, 1, 5);
+        SignedContextV2[] memory signedContexts = new SignedContextV2[](n);
+        for (uint256 i = 0; i < n; i++) {
+            EIP712Domain memory signingDomain = domain();
+            signingDomain.chainId = uint256(chainIdSeed) + i;
+            signedContexts[i] = signedContextsFor(SIGNER_PK + i, signingDomain, words1(bytes32(i)), words1(bytes32(i)))[0];
+        }
+
+        bytes32[][] memory actual = LibContext.buildV2(new bytes32[][](0), signedContexts);
+        assertEq(actual.length, 3 + n);
+        assertEq(actual[1].length, n);
+        assertEq(actual[2].length, n);
+        for (uint256 i = 0; i < n; i++) {
+            assertEq(actual[1][i], addressWord(signedContexts[i].signer));
+            assertEq(actual[2][i], signedContexts[i].domainSeparator);
+            assertEq(actual[3 + i], words1(bytes32(i)));
+        }
+    }
+
+    /// With no signed contexts there are no signers or domain separators
+    /// columns.
+    /// forge-config: default.fuzz.runs = 100
+    function testBuildV2ZeroSignedContexts(bytes32[][] memory base) external view {
         SignedContextV2[] memory signedContexts = new SignedContextV2[](0);
 
-        bytes32[][] memory actual = LibContext.buildV2(base, signedContexts, anyDomainSeparator);
-        assertEqContext(LibContextSlow.buildStructureSlow(base, signedContexts, anyDomainSeparator), actual);
+        bytes32[][] memory actual = LibContext.buildV2(base, signedContexts);
+        assertEqContext(LibContextSlow.buildStructureSlow(base, signedContexts), actual);
         assertEq(actual.length, 1 + base.length);
-        assertEq(actual[0].length, CONTEXT_BASE_V2_ROWS);
-        assertEq(actual[0][CONTEXT_BASE_ROW_DOMAIN_SEPARATOR], anyDomainSeparator);
+        assertEq(actual[0].length, CONTEXT_BASE_ROWS);
     }
 
-    function testBaseV2(bytes32 domainSeparator) external view {
-        bytes32[] memory baseV2 = LibContext.baseV2(domainSeparator);
+    function testBaseV2() external view {
+        bytes32[] memory baseV2 = LibContext.baseV2();
 
         assertEq(CONTEXT_BASE_COLUMN, 0);
-        assertEq(baseV2.length, CONTEXT_BASE_V2_ROWS);
-        assertEq(baseV2.length, 3);
-        assertEq(baseV2[CONTEXT_BASE_ROW_SENDER], bytes32(uint256(uint160(msg.sender))));
-        assertEq(baseV2[CONTEXT_BASE_ROW_CALLING_CONTRACT], bytes32(uint256(uint160(address(this)))));
-        assertEq(baseV2[CONTEXT_BASE_ROW_DOMAIN_SEPARATOR], domainSeparator);
+        assertEq(baseV2.length, CONTEXT_BASE_ROWS);
+        assertEq(baseV2.length, 2);
+        assertEq(baseV2[CONTEXT_BASE_ROW_SENDER], addressWord(msg.sender));
+        assertEq(baseV2[CONTEXT_BASE_ROW_CALLING_CONTRACT], addressWord(address(this)));
         assertTrue(msg.sender != address(this));
     }
 
-    function testBaseV2Allocates(bytes32 domainSeparator) external view {
+    function testBaseV2Allocates() external view {
         uint256 freeMemoryPointerBefore;
         assembly ("memory-safe") {
             freeMemoryPointerBefore := mload(0x40)
         }
-        bytes32[] memory baseV2 = LibContext.baseV2(domainSeparator);
+        bytes32[] memory baseV2 = LibContext.baseV2();
         uint256 freeMemoryPointerAfter;
         uint256 baseV2Pointer;
         assembly ("memory-safe") {
@@ -162,42 +216,21 @@ contract LibContextBuildV2Test is Test {
             baseV2Pointer := baseV2
         }
         assertEq(baseV2Pointer, freeMemoryPointerBefore);
-        assertEq(freeMemoryPointerAfter, freeMemoryPointerBefore + 0x20 * (1 + CONTEXT_BASE_V2_ROWS));
+        assertEq(freeMemoryPointerAfter, freeMemoryPointerBefore + 0x20 * (1 + CONTEXT_BASE_ROWS));
     }
 
-    /// The domain separator row is at a fixed coordinate however many caller
-    /// columns and signed contexts there are.
-    /// forge-config: default.fuzz.runs = 100
-    function testBuildV2ExposesVerifiedDomainSeparator(bytes32[][] memory base, bytes32 x, bytes32 y, bytes32 z)
-        external
-        view
-    {
-        SignedContextV2[] memory signedContexts = new SignedContextV2[](2);
-        signedContexts[0] = signedContextsFor(SIGNER_PK, words2(x, y))[0];
-        signedContexts[1] = signedContextsFor(OTHER_PK, words1(z))[0];
-
-        bytes32[][] memory actual = LibContext.buildV2(base, signedContexts, signingDomainSeparator());
-        assertEq(actual.length, 1 + base.length + 3);
-        assertEq(actual[CONTEXT_BASE_COLUMN].length, CONTEXT_BASE_V2_ROWS);
-        assertEq(actual[CONTEXT_BASE_COLUMN][CONTEXT_BASE_ROW_DOMAIN_SEPARATOR], signingDomainSeparator());
-        for (uint256 i = 0; i < base.length; i++) {
-            assertEq(actual[1 + i], base[i]);
-        }
-    }
-
-    function testBuildV2DomainSeparatorRowIsTheVerifyingSeparator(
+    function testBuildV2DomainSeparatorsColumnIsTheVerifyingSeparator(
         bytes32[] memory words,
         uint64 chainId,
         address verifyingContract
     ) external view {
         words = bounded(words);
         EIP712Domain memory signingDomain = EIP712Domain("LibContextBuildV2Test", "1", chainId, verifyingContract);
-        bytes32 domainSeparator = LibSignedContextV2TypedData.domainSeparator(signingDomain);
         SignedContextV2[] memory signedContexts = signedContextsFor(SIGNER_PK, signingDomain, words, words);
 
-        bytes32[][] memory actual = LibContext.buildV2(new bytes32[][](0), signedContexts, domainSeparator);
-        assertEq(actual[CONTEXT_BASE_COLUMN][CONTEXT_BASE_ROW_DOMAIN_SEPARATOR], domainSeparator);
-        assertEq(actual[2], words);
+        bytes32[][] memory actual = LibContext.buildV2(new bytes32[][](0), signedContexts);
+        assertEq(actual[2], words1(LibSignedContextV2TypedData.domainSeparator(signingDomain)));
+        assertEq(actual[3], words);
     }
 
     /// The signers column shows the ERC-1271 account, not its owner key.
@@ -208,14 +241,16 @@ contract LibContextBuildV2Test is Test {
         SignedContextV2[] memory signedContexts = new SignedContextV2[](1);
         signedContexts[0] = SignedContextV2({
             signer: address(wallet),
+            domainSeparator: signingDomainSeparator(),
             context: words,
             signature: LibSignedContextV2TypedData.signFor(SIGNER_PK, domain(), address(wallet), words)
         });
 
-        bytes32[][] memory actual = this.buildV2External(new bytes32[][](0), signedContexts, signingDomainSeparator());
-        assertEq(actual.length, 3);
-        assertEq(actual[1], words1(bytes32(uint256(uint160(address(wallet))))));
-        assertEq(actual[2], words);
+        bytes32[][] memory actual = this.buildV2External(new bytes32[][](0), signedContexts);
+        assertEq(actual.length, 4);
+        assertEq(actual[1], words1(addressWord(address(wallet))));
+        assertEq(actual[2], words1(signingDomainSeparator()));
+        assertEq(actual[3], words);
     }
 
     function testBuildV2ERC1271RevokedReverts(bytes32[] memory words) external {
@@ -225,14 +260,15 @@ contract LibContextBuildV2Test is Test {
         SignedContextV2[] memory signedContexts = new SignedContextV2[](1);
         signedContexts[0] = SignedContextV2({
             signer: address(wallet),
+            domainSeparator: signingDomainSeparator(),
             context: words,
             signature: LibSignedContextV2TypedData.signFor(SIGNER_PK, domain(), address(wallet), words)
         });
-        assertEq(this.buildV2External(new bytes32[][](0), signedContexts, signingDomainSeparator()).length, 3);
+        assertEq(this.buildV2External(new bytes32[][](0), signedContexts).length, 4);
 
         wallet.revoke();
         vm.expectRevert(abi.encodeWithSelector(InvalidSignature.selector, uint256(0)));
-        this.buildV2External(new bytes32[][](0), signedContexts, signingDomainSeparator());
+        this.buildV2External(new bytes32[][](0), signedContexts);
     }
 
     /// Two ERC-1271 accounts sharing an owner key accept the same digests, so
@@ -247,21 +283,31 @@ contract LibContextBuildV2Test is Test {
         assertEq(walletB.isValidSignature(digestForA, signatureForA), IERC1271.isValidSignature.selector);
 
         SignedContextV2[] memory signedContexts = new SignedContextV2[](1);
-        signedContexts[0] = SignedContextV2({signer: address(walletA), context: words, signature: signatureForA});
-        assertEq(this.buildV2External(new bytes32[][](0), signedContexts, signingDomainSeparator()).length, 3);
+        signedContexts[0] = SignedContextV2({
+            signer: address(walletA),
+            domainSeparator: signingDomainSeparator(),
+            context: words,
+            signature: signatureForA
+        });
+        assertEq(this.buildV2External(new bytes32[][](0), signedContexts).length, 4);
 
         signedContexts[0].signer = address(walletB);
         vm.expectRevert(abi.encodeWithSelector(InvalidSignature.selector, uint256(0)));
-        this.buildV2External(new bytes32[][](0), signedContexts, signingDomainSeparator());
+        this.buildV2External(new bytes32[][](0), signedContexts);
     }
 
     function testBuildV2InvalidSignatureSecondIndexReverts(bytes32 x) external {
         SignedContextV2[] memory signedContexts = new SignedContextV2[](2);
         signedContexts[0] = signedContextsFor(SIGNER_PK, words1(x))[0];
-        signedContexts[1] = SignedContextV2({signer: address(0xdead), context: words1(x), signature: new bytes(65)});
+        signedContexts[1] = SignedContextV2({
+            signer: address(0xdead),
+            domainSeparator: signingDomainSeparator(),
+            context: words1(x),
+            signature: new bytes(65)
+        });
 
         vm.expectRevert(abi.encodeWithSelector(InvalidSignature.selector, uint256(1)));
-        this.buildV2External(new bytes32[][](0), signedContexts, signingDomainSeparator());
+        this.buildV2External(new bytes32[][](0), signedContexts);
     }
 
     function testBuildV2WrongWordReverts(bytes32 x, bytes32 y) external {
@@ -269,35 +315,35 @@ contract LibContextBuildV2Test is Test {
         SignedContextV2[] memory signedContexts = signedContextsFor(SIGNER_PK, domain(), words1(y), words1(x));
 
         vm.expectRevert(abi.encodeWithSelector(InvalidSignature.selector, uint256(0)));
-        this.buildV2External(new bytes32[][](0), signedContexts, signingDomainSeparator());
+        this.buildV2External(new bytes32[][](0), signedContexts);
     }
 
     function testBuildV2AppendedWordReverts(bytes32 x, bytes32 y) external {
         SignedContextV2[] memory signedContexts = signedContextsFor(SIGNER_PK, domain(), words2(x, y), words1(x));
 
         vm.expectRevert(abi.encodeWithSelector(InvalidSignature.selector, uint256(0)));
-        this.buildV2External(new bytes32[][](0), signedContexts, signingDomainSeparator());
+        this.buildV2External(new bytes32[][](0), signedContexts);
     }
 
     function testBuildV2AppendedZeroReverts(bytes32 x) external {
         SignedContextV2[] memory signedContexts = signedContextsFor(SIGNER_PK, domain(), words2(x, 0), words1(x));
 
         vm.expectRevert(abi.encodeWithSelector(InvalidSignature.selector, uint256(0)));
-        this.buildV2External(new bytes32[][](0), signedContexts, signingDomainSeparator());
+        this.buildV2External(new bytes32[][](0), signedContexts);
     }
 
     function testBuildV2TruncatedReverts(bytes32 x, bytes32 y) external {
         SignedContextV2[] memory signedContexts = signedContextsFor(SIGNER_PK, domain(), words1(x), words2(x, y));
 
         vm.expectRevert(abi.encodeWithSelector(InvalidSignature.selector, uint256(0)));
-        this.buildV2External(new bytes32[][](0), signedContexts, signingDomainSeparator());
+        this.buildV2External(new bytes32[][](0), signedContexts);
     }
 
     function testBuildV2EmptiedReverts(bytes32 x) external {
         SignedContextV2[] memory signedContexts = signedContextsFor(SIGNER_PK, domain(), new bytes32[](0), words1(x));
 
         vm.expectRevert(abi.encodeWithSelector(InvalidSignature.selector, uint256(0)));
-        this.buildV2External(new bytes32[][](0), signedContexts, signingDomainSeparator());
+        this.buildV2External(new bytes32[][](0), signedContexts);
     }
 
     function testBuildV2WrongSignerReverts(bytes32[] memory words, uint256 otherPk) external {
@@ -309,24 +355,47 @@ contract LibContextBuildV2Test is Test {
         signedContexts[0].signer = vm.addr(otherPk);
 
         vm.expectRevert(abi.encodeWithSelector(InvalidSignature.selector, uint256(0)));
-        this.buildV2External(new bytes32[][](0), signedContexts, signingDomainSeparator());
+        this.buildV2External(new bytes32[][](0), signedContexts);
     }
 
     function testBuildV2EmptySignatureReverts(bytes32[] memory words) external {
         SignedContextV2[] memory signedContexts = new SignedContextV2[](1);
-        signedContexts[0] = SignedContextV2({signer: vm.addr(SIGNER_PK), context: words, signature: ""});
+        signedContexts[0] = SignedContextV2({
+            signer: vm.addr(SIGNER_PK),
+            domainSeparator: signingDomainSeparator(),
+            context: words,
+            signature: ""
+        });
 
         vm.expectRevert(abi.encodeWithSelector(InvalidSignature.selector, uint256(0)));
-        this.buildV2External(new bytes32[][](0), signedContexts, signingDomainSeparator());
+        this.buildV2External(new bytes32[][](0), signedContexts);
     }
 
-    function testBuildV2DifferentDomainSeparatorReverts(bytes32[] memory words, bytes32 otherDomainSeparator) external {
+    /// A signature under domain A presented with domain separator B does not
+    /// verify.
+    function testBuildV2PresentedDomainSeparatorMismatchReverts(bytes32[] memory words, bytes32 otherDomainSeparator)
+        external
+    {
         words = bounded(words);
         vm.assume(otherDomainSeparator != signingDomainSeparator());
         SignedContextV2[] memory signedContexts = signedContextsFor(SIGNER_PK, words);
+        signedContexts[0].domainSeparator = otherDomainSeparator;
 
         vm.expectRevert(abi.encodeWithSelector(InvalidSignature.selector, uint256(0)));
-        this.buildV2External(new bytes32[][](0), signedContexts, otherDomainSeparator);
+        this.buildV2External(new bytes32[][](0), signedContexts);
+    }
+
+    /// Each signed context is verified under its own domain separator, so a
+    /// second context presenting the first's domain separator reverts at its
+    /// own index.
+    function testBuildV2SecondDomainSeparatorMismatchReverts(bytes32 x, bytes32 y) external {
+        SignedContextV2[] memory signedContexts = new SignedContextV2[](2);
+        signedContexts[0] = signedContextsFor(SIGNER_PK, domain(), words1(x), words1(x))[0];
+        signedContexts[1] = signedContextsFor(OTHER_PK, otherDomain(), words1(y), words1(y))[0];
+        signedContexts[1].domainSeparator = signedContexts[0].domainSeparator;
+
+        vm.expectRevert(abi.encodeWithSelector(InvalidSignature.selector, uint256(1)));
+        this.buildV2External(new bytes32[][](0), signedContexts);
     }
 
     function testBuildV2DifferentDomainFieldsRevert(
@@ -342,17 +411,15 @@ contract LibContextBuildV2Test is Test {
 
         EIP712Domain memory otherContract = domain();
         otherContract.verifyingContract = otherVerifyingContract;
+        signedContexts[0].domainSeparator = LibSignedContextV2TypedData.domainSeparator(otherContract);
         vm.expectRevert(abi.encodeWithSelector(InvalidSignature.selector, uint256(0)));
-        this.buildV2External(
-            new bytes32[][](0), signedContexts, LibSignedContextV2TypedData.domainSeparator(otherContract)
-        );
+        this.buildV2External(new bytes32[][](0), signedContexts);
 
         EIP712Domain memory otherChain = domain();
         otherChain.chainId = otherChainId;
+        signedContexts[0].domainSeparator = LibSignedContextV2TypedData.domainSeparator(otherChain);
         vm.expectRevert(abi.encodeWithSelector(InvalidSignature.selector, uint256(0)));
-        this.buildV2External(
-            new bytes32[][](0), signedContexts, LibSignedContextV2TypedData.domainSeparator(otherChain)
-        );
+        this.buildV2External(new bytes32[][](0), signedContexts);
     }
 
     /// A `personal_sign` signature over the packed words, the pre-EIP-712
@@ -364,10 +431,15 @@ contract LibContextBuildV2Test is Test {
         assertEq(ECDSA.recover(personalSignDigest, signature), vm.addr(SIGNER_PK));
 
         SignedContextV2[] memory signedContexts = new SignedContextV2[](1);
-        signedContexts[0] = SignedContextV2({signer: vm.addr(SIGNER_PK), context: words, signature: signature});
+        signedContexts[0] = SignedContextV2({
+            signer: vm.addr(SIGNER_PK),
+            domainSeparator: signingDomainSeparator(),
+            context: words,
+            signature: signature
+        });
 
         vm.expectRevert(abi.encodeWithSelector(InvalidSignature.selector, uint256(0)));
-        this.buildV2External(new bytes32[][](0), signedContexts, signingDomainSeparator());
+        this.buildV2External(new bytes32[][](0), signedContexts);
     }
 
     function word(bytes memory data, uint256 offset) internal pure returns (bytes32) {
@@ -393,8 +465,7 @@ contract LibContextBuildV2Test is Test {
         returns (bytes memory)
     {
         return abi.encodeCall(
-            this.buildV2External,
-            (new bytes32[][](0), signedContextsFor(SIGNER_PK, domain(), context, signedWords), signingDomainSeparator())
+            this.buildV2External, (new bytes32[][](0), signedContextsFor(SIGNER_PK, domain(), context, signedWords))
         );
     }
 
@@ -406,7 +477,7 @@ contract LibContextBuildV2Test is Test {
         assertEq(uint256(word(payload, signedContextsStart)), 1, "one signed context");
         uint256 elementsStart = signedContextsStart + 0x20;
         uint256 structStart = elementsStart + uint256(word(payload, elementsStart));
-        return structStart + uint256(word(payload, structStart + 0x20));
+        return structStart + uint256(word(payload, structStart + 0x40));
     }
 
     /// The decoder bounds an array by the end of calldata, so a
@@ -423,9 +494,10 @@ contract LibContextBuildV2Test is Test {
         (bool success, bytes memory returnData) = address(this).call(payload);
         assertTrue(success);
         bytes32[][] memory context = abi.decode(returnData, (bytes32[][]));
-        assertEq(context.length, 3);
-        assertEq(context[1], words1(bytes32(uint256(uint160(vm.addr(SIGNER_PK))))));
-        assertEq(context[2], words1(x));
+        assertEq(context.length, 4);
+        assertEq(context[1], words1(addressWord(vm.addr(SIGNER_PK))));
+        assertEq(context[2], words1(signingDomainSeparator()));
+        assertEq(context[3], words1(x));
     }
 
     /// Bounded at 2^58 so the decoder's `32 * (length + 1)` byte reservation
@@ -490,7 +562,7 @@ contract LibContextBuildV2Test is Test {
         (bool success, bytes memory returnData) = address(this).call(payload);
         assertTrue(success);
         bytes32[][] memory context = abi.decode(returnData, (bytes32[][]));
-        assertEq(context.length, 3);
-        assertEq(context[2].length, 0);
+        assertEq(context.length, 4);
+        assertEq(context[3].length, 0);
     }
 }

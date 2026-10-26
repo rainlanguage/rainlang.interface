@@ -7,7 +7,7 @@ import {
     LibContext,
     MessageHashUtils,
     CONTEXT_BASE_COLUMN,
-    CONTEXT_BASE_ROW_DOMAIN_SEPARATOR
+    CONTEXT_BASE_ROWS
 } from "src/lib/caller/LibContext.sol";
 import {SignedContextV2} from "src/interface/IInterpreterCallerV5.sol";
 
@@ -22,12 +22,12 @@ contract LibContextKnownGoodVectorTest is Test {
     bytes constant SIGNATURE =
         hex"b0ea782b9e55ab432cd3c0edf0dfee5514d240b378ed0f52293b085d9ca5e69c44ac96b08c016612ef87f98836b56bbf4f2ef8d1fae1c40a14d17c575e8827711b";
 
-    function buildV2External(
-        bytes32[][] memory baseContext,
-        SignedContextV2[] memory signedContexts,
-        bytes32 domainSeparator
-    ) external view returns (bytes32[][] memory) {
-        return LibContext.buildV2(baseContext, signedContexts, domainSeparator);
+    function buildV2External(bytes32[][] memory baseContext, SignedContextV2[] memory signedContexts)
+        external
+        view
+        returns (bytes32[][] memory)
+    {
+        return LibContext.buildV2(baseContext, signedContexts);
     }
 
     function context() internal pure returns (bytes32[] memory) {
@@ -47,13 +47,13 @@ contract LibContextKnownGoodVectorTest is Test {
     }
 
     function testKnownGoodHashStruct() external pure {
-        assertEq(LibContext.hashStruct(SignedContextV2(SIGNER, context(), SIGNATURE)), STRUCT_HASH);
+        assertEq(LibContext.hashStruct(SignedContextV2(SIGNER, DOMAIN_SEPARATOR, context(), SIGNATURE)), STRUCT_HASH);
     }
 
     function testKnownGoodDigest() external pure {
         assertEq(
             MessageHashUtils.toTypedDataHash(
-                DOMAIN_SEPARATOR, LibContext.hashStruct(SignedContextV2(SIGNER, context(), SIGNATURE))
+                DOMAIN_SEPARATOR, LibContext.hashStruct(SignedContextV2(SIGNER, DOMAIN_SEPARATOR, context(), SIGNATURE))
             ),
             DIGEST
         );
@@ -61,14 +61,16 @@ contract LibContextKnownGoodVectorTest is Test {
 
     function testKnownGoodBuildV2AcceptsSignature() external view {
         SignedContextV2[] memory signedContexts = new SignedContextV2[](1);
-        signedContexts[0] = SignedContextV2(SIGNER, context(), SIGNATURE);
+        signedContexts[0] = SignedContextV2(SIGNER, DOMAIN_SEPARATOR, context(), SIGNATURE);
 
-        bytes32[][] memory built = this.buildV2External(new bytes32[][](0), signedContexts, DOMAIN_SEPARATOR);
+        bytes32[][] memory built = this.buildV2External(new bytes32[][](0), signedContexts);
 
-        assertEq(built.length, 3);
-        assertEq(built[CONTEXT_BASE_COLUMN][CONTEXT_BASE_ROW_DOMAIN_SEPARATOR], DOMAIN_SEPARATOR);
+        assertEq(built.length, 4);
+        assertEq(built[CONTEXT_BASE_COLUMN].length, CONTEXT_BASE_ROWS);
         assertEq(built[1].length, 1);
         assertEq(built[1][0], bytes32(uint256(uint160(SIGNER))));
-        assertEq(built[2], context());
+        assertEq(built[2].length, 1);
+        assertEq(built[2][0], DOMAIN_SEPARATOR);
+        assertEq(built[3], context());
     }
 }
