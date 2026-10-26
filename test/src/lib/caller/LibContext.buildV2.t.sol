@@ -132,10 +132,7 @@ contract LibContextBuildV2Test is Test {
     /// Each signed context verifies under its own signer's domain, and the
     /// domain separators column holds each one at its signer's row.
     /// forge-config: default.fuzz.runs = 100
-    function testBuildV2DifferentDomainsBuild(bytes32[][] memory base, bytes32 x, bytes32 y, bytes32 z)
-        external
-        view
-    {
+    function testBuildV2DifferentDomainsBuild(bytes32[][] memory base, bytes32 x, bytes32 y, bytes32 z) external view {
         bytes32 domainSeparatorA = signingDomainSeparator();
         bytes32 domainSeparatorB = LibSignedContextV2TypedData.domainSeparator(otherDomain());
         assertNotEq(domainSeparatorA, domainSeparatorB);
@@ -166,7 +163,8 @@ contract LibContextBuildV2Test is Test {
         for (uint256 i = 0; i < n; i++) {
             EIP712Domain memory signingDomain = domain();
             signingDomain.chainId = uint256(chainIdSeed) + i;
-            signedContexts[i] = signedContextsFor(SIGNER_PK + i, signingDomain, words1(bytes32(i)), words1(bytes32(i)))[0];
+            signedContexts[i] =
+                signedContextsFor(SIGNER_PK + i, signingDomain, words1(bytes32(i)), words1(bytes32(i)))[0];
         }
 
         bytes32[][] memory actual = LibContext.buildV2(new bytes32[][](0), signedContexts);
@@ -361,10 +359,7 @@ contract LibContextBuildV2Test is Test {
     function testBuildV2EmptySignatureReverts(bytes32[] memory words) external {
         SignedContextV2[] memory signedContexts = new SignedContextV2[](1);
         signedContexts[0] = SignedContextV2({
-            signer: vm.addr(SIGNER_PK),
-            domainSeparator: signingDomainSeparator(),
-            context: words,
-            signature: ""
+            signer: vm.addr(SIGNER_PK), domainSeparator: signingDomainSeparator(), context: words, signature: ""
         });
 
         vm.expectRevert(abi.encodeWithSelector(InvalidSignature.selector, uint256(0)));
@@ -432,10 +427,7 @@ contract LibContextBuildV2Test is Test {
 
         SignedContextV2[] memory signedContexts = new SignedContextV2[](1);
         signedContexts[0] = SignedContextV2({
-            signer: vm.addr(SIGNER_PK),
-            domainSeparator: signingDomainSeparator(),
-            context: words,
-            signature: signature
+            signer: vm.addr(SIGNER_PK), domainSeparator: signingDomainSeparator(), context: words, signature: signature
         });
 
         vm.expectRevert(abi.encodeWithSelector(InvalidSignature.selector, uint256(0)));
