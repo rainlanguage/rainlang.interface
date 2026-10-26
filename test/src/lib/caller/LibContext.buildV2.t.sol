@@ -160,7 +160,7 @@ contract LibContextBuildV2Test is Test {
     /// The domain separators column is aligned with the signers column: row
     /// `i` of both is signed context `i`.
     /// forge-config: default.fuzz.runs = 50
-    function testBuildV2DomainSeparatorsAlignedWithSigners(uint256 n, uint64 chainIdSeed) external view {
+    function testBuildV2DomainSeparatorsAlignedWithSigners(uint256 n, uint32 chainIdSeed) external view {
         n = bound(n, 1, 5);
         SignedContextV2[] memory signedContexts = new SignedContextV2[](n);
         for (uint256 i = 0; i < n; i++) {
