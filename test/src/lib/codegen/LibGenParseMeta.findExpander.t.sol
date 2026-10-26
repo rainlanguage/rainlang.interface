@@ -17,12 +17,13 @@ contract LibGenParseMetaFindExpanderTest is Test {
     function buildAuthoringMeta(AuthoringMetaV2[0x20] memory source, uint256 length)
         internal
         pure
-        returns (AuthoringMetaV2[] memory authoringMeta)
+        returns (AuthoringMetaV2[] memory)
     {
-        authoringMeta = new AuthoringMetaV2[](length);
+        AuthoringMetaV2[] memory authoringMeta = new AuthoringMetaV2[](length);
         for (uint256 i = 0; i < length; i++) {
             authoringMeta[i] = source[i];
         }
+        return authoringMeta;
     }
 
     /// Test that we can find an expansion for a small number of words in a
